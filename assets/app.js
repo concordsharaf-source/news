@@ -26,9 +26,9 @@ const ENGINES = {
   gemini: {
     label: "🟣 Google Gemini المجاني (يعمل باليمن بدون VPN ✅)",
     models: [
-      { id: "gemini-3.8-flash", name: "Gemini 3.8 Flash (الأحدث والأدق للتحرير - موصى به)" },
+      { id: "gemini-3.8-flash", name: "Gemini 3.8 Flash (الأحدث والأدق للتحرير - مجاني)" },
       { id: "gemini-3.5-flash-lite", name: "Gemini 3.5 Flash-Lite (سريع جداً وحصة مجانية كبيرة)" },
-      { id: "gemini-3.6-flash", name: "Gemini 3.6 Flash" },
+      { id: "gemini-3.6-flash", name: "Gemini 3.6 Flash (مجاني)" },
       { id: "gemini-3.1-pro-preview", name: "Gemini 3.1 Pro (للتحليل والنشرات الضخمة)" }
     ]
   },
@@ -46,14 +46,6 @@ const ENGINES = {
       { id: "openrouter/free", name: "الموجّه التلقائي لأفضل نموذج مجاني متاح" },
       { id: "deepseek/deepseek-r1:free", name: "DeepSeek R1 (مجاني)" },
       { id: "meta-llama/llama-3.3-70b-instruct:free", name: "Llama 3.3 70B (مجاني)" }
-    ]
-  },
-  puter: {
-    label: "☁️ وسيط Puter السحابي (لتشغيل Claude بدون مفتاح)",
-    models: [
-      { id: "anthropic/claude-sonnet-5-5", name: "Claude Sonnet 5.5" },
-      { id: "google/gemini-3.1-pro-preview", name: "Gemini 3.1 Pro" },
-      { id: "openai/gpt-5.4-nano", name: "GPT-5.4 Nano" }
     ]
   }
 };
@@ -159,11 +151,25 @@ function populateEngineSelectors() {
   if (state.keys.gemini) pSel.value = "gemini";
   else if (state.keys.groq) pSel.value = "groq";
   else if (state.keys.openrouter) pSel.value = "openrouter";
-  else pSel.value = "puter";
+  else pSel.value = "gemini"; // Always default to free Google Gemini, never Puter!
 
-  sSel.value = state.keys.groq ? "groq" : "openrouter";
+  sSel.value = state.keys.groq ? "groq" : "gemini";
   updateModelDropdown("primary");
   updateModelDropdown("secondary");
+
+  const banner = document.getElementById("missingKeyBanner");
+  if (banner) {
+    const hasAnyKey = !!(state.keys.gemini || state.keys.groq || state.keys.openrouter);
+    banner.style.display = hasAnyKey ? "none" : "block";
+  }
+}
+
+function saveQuickGeminiKey() {
+  const val = (document.getElementById("quickGeminiKeyInput")?.value || "").trim();
+  if (!val) { showToast("⚠️ الصق المفتاح أولاً"); return; }
+  document.getElementById("geminiKeyInput").value = val;
+  saveApiKeys();
+  showToast("✅ تم حفظ مفتاح Gemini بنجاح! يمكنك التحرير الآن فوراً");
 }
 
 function updateModelDropdown(which) {
@@ -333,17 +339,9 @@ function extractPuterText(res) {
 }
 
 async function callModel(engine, model, promptText) {
-  if (engine === "puter") {
-    if (typeof window.puter === "undefined" || !window.puter.ai) {
-      throw new Error("خدمة Puter غير متاحة هنا؛ استخدم مفتاح Gemini أو Groq عبر جسر Vercel.");
-    }
-    const res = await window.puter.ai.chat(promptText, { model });
-    return extractPuterText(res).trim();
-  }
-
   const apiKey = (state.keys[engine] || "").trim();
-  if (!apiKey) throw new Error(`يرجى وضع مفتاح ${engine.toUpperCase()} المجاني أولاً في تبويب «⚡ الربط والمزامنة».`);
 
+  // Try Vercel Serverless Bridge (/api/ai) first — also supports GEMINI_API_KEY / GROQ_API_KEY stored in Vercel Environment Variables!
   try {
     const bridgeRes = await fetch("/api/ai", {
       method: "POST",
@@ -357,10 +355,13 @@ async function callModel(engine, model, promptText) {
       return (bridgeData.text || "").trim();
     }
   } catch (bridgeErr) {
-    // Only fall back to direct browser call if /api/ai timed out or was unreachable; rethrow real API errors
     if (bridgeErr.message && !bridgeErr.message.includes("Failed to fetch") && !bridgeErr.message.includes("Load failed") && !bridgeErr.message.includes("NetworkError")) {
       throw bridgeErr;
     }
+  }
+
+  if (!apiKey) {
+    throw new Error(`يرجى لصق مفتاح ${engine.toUpperCase()} المجاني أولاً في تبويب «⚡ الربط والمزامنة» (أو في المربع الأصفر أعلاه).`);
   }
 
   if (engine === "gemini") {
@@ -1193,14 +1194,14 @@ function setupPwaFeatures() {
   // Purge any old v1-v4 PWA caches automatically so updates apply immediately!
   if ("caches" in window) {
     caches.keys().then(keys => {
-      keys.filter(k => k !== "mihbarah-pwa-v5").forEach(k => caches.delete(k));
+      keys.filter(k => k !== "mihbarah-pwa-v6").forEach(k => caches.delete(k));
     }).catch(() => {});
   }
 
   // 1. Register Service Worker
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js?v=5").then(reg => {
+      navigator.serviceWorker.register("sw.js?v=6").then(reg => {
         reg.update().catch(() => {});
       }).catch(() => {});
     });
