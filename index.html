@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="assets/style.css?v=13" />
+  <link rel="stylesheet" href="assets/style.css?v=14" />
 </head>
 <body>
   <header class="topbar">
@@ -274,7 +274,7 @@
               <div>
                 <label>تنسيق الفاصل الإجباري للبث:</label>
                 <select id="tickerSeparator" onchange="handleTickerSeparatorChange()">
-                  <option value="bitmap" selected>📺 صيغة البث (&lt;BITMAP&gt;E:\NEWS\Logo.png&lt;/BITMAP&gt;)</option>
+                  <option value="bitmap" selected>📺 صيغة البث المعتمدة (فاصل BITMAP)</option>
                   <option value="newline">فقرات صافية تحت بعض (بدون كود BITMAP)</option>
                   <option value="bullet">نقطة بداية لكل فقرة (• ...)</option>
                   <option value="inline">شريط متصل بفاصل ( • )</option>
@@ -294,10 +294,22 @@
               <input type="text" id="tickerExtraNote" placeholder="مثال: ركّز على الأخبار الميدانية أولاً" />
             </div>
 
-            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text); margin-bottom:12px;">
-              <input type="checkbox" id="tickerTwoStage" style="width:16px; height:16px;" />
-              <span>🛡️ <strong>مراجعة مزدوجة إضافية (اختياري):</strong> تمريرة ثانية بالذكاء الاصطناعي (التصحيح المصطلحي يعمل تلقائياً دائماً)</span>
-            </label>
+            <div class="radar-box" style="margin-bottom:12px;">
+              <div class="row-2" style="margin-bottom:8px;">
+                <div>
+                  <label>المحرك المجاني للشريط (بدون VPN ✅):</label>
+                  <select id="tickerEngineSelect" onchange="updateModelDropdown('ticker')"></select>
+                </div>
+                <div>
+                  <label>النموذج العامل الآن:</label>
+                  <select id="tickerModelSelect"></select>
+                </div>
+              </div>
+              <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text); margin:0;">
+                <input type="checkbox" id="tickerTwoStage" style="width:16px; height:16px;" />
+                <span>🛡️ <strong>مراجعة مزدوجة إضافية (اختياري):</strong> تمريرة ثانية بالذكاء الاصطناعي (التصحيح المصطلحي يعمل تلقائياً دائماً)</span>
+              </label>
+            </div>
 
             <div style="display:flex; flex-wrap:wrap; gap:8px;">
               <button class="btn btn-ticker" id="runTickerBtn" style="flex:1; min-width:220px;" onclick="runTickerWorkflow()">
@@ -560,6 +572,6 @@
   </div>
 
   <div id="toast" class="toast"></div>
-  <script src="assets/app.js?v=13"></script>
+  <script src="assets/app.js?v=14"></script>
 </body>
 </html>

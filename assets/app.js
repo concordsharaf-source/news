@@ -181,19 +181,26 @@ async function init() {
 function populateEngineSelectors() {
   const pSel = document.getElementById("primaryEngineSelect");
   const sSel = document.getElementById("secondaryEngineSelect");
+  const tSel = document.getElementById("tickerEngineSelect");
   pSel.innerHTML = ""; sSel.innerHTML = "";
-  for (const [k, v] of Object.entries(ENGINES)) {
-    pSel.innerHTML += `<option value="${k}">${v.label}</option>`;
-    sSel.innerHTML += `<option value="${k}">${v.label}</option>`;
-  }
-  if (state.keys.groq) pSel.value = "groq";
-  else if (state.keys.openrouter) pSel.value = "openrouter";
-  else pSel.value = "instant_free";
+  if (tSel) tSel.innerHTML = "";
 
+  for (const [k, v] of Object.entries(ENGINES)) {
+    const opt = `<option value="${k}">${v.label}</option>`;
+    pSel.innerHTML += opt;
+    sSel.innerHTML += opt;
+    if (tSel) tSel.innerHTML += opt;
+  }
+
+  const defEngine = state.keys.groq ? "groq" : "instant_free";
+  pSel.value = defEngine;
   sSel.value = "instant_free";
+  if (tSel) tSel.value = defEngine;
+
   updateModelDropdown("primary");
   updateModelDropdown("secondary");
-  // Set second model in comparison to gpt-oss-120b so comparing instant_free compares Nemotron-550B vs GPT-OSS-120B!
+  if (tSel) updateModelDropdown("ticker");
+
   const sMod = document.getElementById("secondaryModelSelect");
   if (sSel.value === "instant_free" && sMod && sMod.options.length > 1) {
     sMod.selectedIndex = 1;
@@ -217,9 +224,14 @@ async function pasteAndAuditOutput(targetId) {
   try {
     const t = await navigator.clipboard.readText();
     if (!t || !t.trim()) { showToast("⚠️ الحافظة فارغة"); return; }
+    // Guard against accidentally pasting the copied prompt/rules back into the output box!
+    if (/أنت (رئيس ديسك تحرير|محرر شريط إخباري)|<قواعد_التحرير_الإلزامية>|<قواعد_تحويل_النشرات/.test(t)) {
+      showToast("⚠️ الحافظة تحتوي على «أمر التحرير المنسوخ» وليس النتيجة! الصقه في الموقع الخارجي أولاً ثم انسخ رده");
+      return;
+    }
     document.getElementById(targetId).value = t.trim();
     autoFixArabicErrors(targetId);
-    showToast("✅ تم لصق نتيجة Arena / Claude وتصحيح المصطلحات وفحصها بالرادار فوراً!");
+    showToast("✅ تم لصق النتيجة وتصحيح المصطلحات وفحصها بالرادار فوراً!");
   } catch (e) {
     showToast("اضغط داخل مربع المخرجات واستخدم Ctrl+V للصق ثم اضغط «✨ تصحيح»");
   }
@@ -313,58 +325,44 @@ async function buildTickerPrompt(rawBulletin) {
   const maxWords = parseInt(document.getElementById("tickerMaxWords").value, 10) || 25;
   const sepMode = document.getElementById("tickerSeparator").value;
   const extraNote = document.getElementById("tickerExtraNote").value.trim();
-  const chosenExamples = await getRelevantTickerExamples(3);
+  const chosenExamples = await getRelevantTickerExamples(2);
 
-  const rulesBlock = activeRules.map((r, i) => `${i + 1}. ${r.text}`).join("\n");
-  // Filter out written-hundred dictionary items that don't apply to numeric ticker digits, keep political/orthography terms
+  const inputWords = rawBulletin.trim() ? rawBulletin.trim().split(/\s+/).length : 0;
+  const volumeHint = inputWords >= 450
+    ? "هذه نشرة كاملة: فكّك جميع أخبارها بالكامل بحيث يتراوح إجمالي الشريط بين 800 و 1000 كلمة تقريباً في رد واحد مكتمل."
+    : `هذا نص قصير (${inputWords} كلمة فقط): فكّك الوقائع الموجودة فيه فقط إلى فقرات شريط واضحة (من 10 إلى ${maxWords} كلمة للفقرة) دون حشو ودون إضافة معلومات من خارجه.`;
+
+  const rulesBlock = activeRules.map((r, i) => `- ${r.text}`).join("\n");
   const dictBlock = state.dictionary
     .filter(d => !/مئة/.test(d.bad))
-    .slice(0, 35)
-    .map(d => `- يُمنع «${d.bad}» والصواب المعتمد «${d.good}»`)
-    .join("\n");
+    .slice(0, 28)
+    .map(d => `«${d.bad}» ⬅ «${d.good}»`)
+    .join(" | ");
   const examplesBlock = chosenExamples.map((ex, idx) =>
-    `<مثال_نشرة_${idx + 1}>\n[النشرة الخام قبل التفكيك]:\n${ex.raw}\n\n[الشريط الإخباري المعتمد المستخرج منها]:\n${ex.edited}\n</مثال_نشرة_${idx + 1}>`
+    `مثال توضيحي (${idx + 1}) لطريقة التفكيك والفاصل فقط (لا تنقل أخباره):\n[المدخل]:\n${ex.raw}\n\n[المخرج المطلوب]:\n${ex.edited}`
   ).join("\n\n");
 
   const separatorInstruction = sepMode === "bitmap"
-    ? `بعد كل فقرة شريط ضع سطراً فارغاً ثم الفاصل الإجباري التالي حرفياً في سطر مستقل ثم سطراً فارغاً:\n<BITMAP>E:\\NEWS\\Logo.png</BITMAP>`
-    : `ضع كل فقرة شريط في سطر مستقل وحدها دون ترقيم ودون نقطة في نهايتها.`;
+    ? `ضع بعد كل فقرة سطراً فارغاً ثم السطر التالي حرفياً:\n<BITMAP>E:\\NEWS\\Logo.png</BITMAP>\nثم سطراً فارغاً قبل الفقرة التالية.`
+    : `ضع كل فقرة في سطر مستقل وحدها دون ترقيم ودون نقطة في نهايتها.`;
 
-  return `أنت محرر شريط إخباري تلفزيوني محترف ومدقق لغوي صارم.
-مهمتك: تحويل وتفكيك <النشرة_الإخبارية_الخام> كاملة إلى شريط إخباري شامل لجميع الأخبار الواردة فيها دون حذف أي خبر مهم ودون اختصارها إلى ملخص ودون إضافة أي معلومات غير موجودة في النص، في رد واحد مكتمل.
+  return `أنت محرر شريط إخباري تلفزيوني محترف. مهمتك الوحيدة: تحويل النص الإخباري الموجود في نهاية هذه الرسالة إلى فقرات شريط إخباري جاهزة للبث التلفزيوني.
 
-<قواعد_تحويل_النشرات_إلى_شريط_إخباري>
+التعليمات الإلزامية للتنفيذ (طبّقها عملياً وإياك أن تعيد كتابتها في ردك):
 ${rulesBlock}
-- الطول المثالي لكل فقرة: من 10 إلى ${maxWords} كلمة تقريباً تحمل معنى كاملاً واضحاً.
-- حجم الشريط للنشرة الكاملة: بين 800 و 1000 كلمة صافية تقريباً (أكبر عدد ممكن من الفقرات المتوسطة الواضحة دون حشو أو بتر).
-</قواعد_تحويل_النشرات_إلى_شريط_إخباري>
+- ${volumeHint}
+- الطول المثالي لكل فقرة: من 10 إلى ${maxWords} كلمة تحمل معنى تاماً، وتبدأ بالفاعل ثم الفعل (مثال: وزارة الصحة تعلن... / قوات الاحتلال الصهيوني تعتقل 20 فلسطينياً)، وصيغ الضحايا (استشهاد رجلين / استشهاد 3 أطفال / إصابة 4 مدنيين).
+- الأرقام في الشريط بالرموز دائماً (3، 15، 124) مع مسافة قبل الرقم وبعده.
+- احذف رموز الإخراج (lvo، Ss، Vt، Clip، Vb، مشاهد) والنقطة في نهاية السطر، والتزم بالمصطلحات المعتمدة: (${dictBlock}).
+- ${separatorInstruction}
+${extraNote ? `- توجيه إضافي: ${extraNote}` : ""}
 
-<ضوابط_حاسمة_للشريط_الإخباري>
-1. الفاعل أولاً دائماً: كل فقرة تبدأ بالفاعل ثم الفعل (✅ وزارة الصحة تعلن... / ✅ قوات الاحتلال الصهيوني تعتقل 20 فلسطينياً)، ويُمنع البدء بالفعل الماضي (❌ أعلنت وزارة الصحة / ❌ اعتقل الاحتلال).
-2. الصيغ الإخبارية للشهداء والجرحى: يُكتب (استشهاد رجلين / استشهاد 3 أطفال / إصابة امرأتين / إصابة 4 مدنيين) ولا يُكتب (رجلان استشهدا / امرأتان أصيبتا).
-3. الأرقام في الشريط تُكتب بالأرقام الرقمية دائماً (3، 15، 124، 3024) مع ترك مسافة قبل الرقم وبعده داخل الجملة (مثال: استشهاد 5 مدنيين وإصابة 3 آخرين)، ولا تُكتب بالحروف إلا إذا كانت جزءاً من تسمية رسمية.
-4. التصريحات الطويلة: أول فقرة ملخص التصريح، ثم (وزارة الخارجية تؤكد... / وزارة الخارجية تشير... / وزارة الخارجية: ...) دون إعادة الاسم الكامل أو الصفة الكاملة في كل فقرة.
-5. المتحدث العسكري اليمني: في أول فقرة فقط «المتحدث باسم القوات المسلحة العميد يحيى سريع يؤكد...»، وفي الفقرات التالية «العميد يحيى سريع يؤكد... / العميد يحيى سريع يعلن... / العميد يحيى سريع: ...».
-6. تجاهل واحذف تماماً جميع رموز وتعليمات الإخراج التلفزيوني: (lvo، Ss، Vt، Clip، Vb، مشاهد)، ولا تضع نقطة في نهاية الفقرة، ولا عناوين داخل الشريط، ولا أرقام فقرات، ولا عبارات «خبر عاجل» أو «متابعة».
-7. المصطلحات الثابتة الإلزامية: (العدو الصهيوني، الكيان الصهيوني، الاحتلال، قوات الاحتلال، جيش العدو، استشهاد، ارتقاء، مائة عند ورودها لفظاً رسمياً):
-${dictBlock}
-</ضوابط_حاسمة_للشريط_الإخباري>
-
-${examplesBlock ? `<أمثلة_النشرات_السابقة>
-تنبيه: هذه الأمثلة لتعلّم طريقة التفكيك والصياغة والفاصل فقط؛ لا تنقل منها أي خبر إلى نشرة اليوم!
-${examplesBlock}
-</أمثلة_النشرات_السابقة>` : ""}
-
-${extraNote ? `<توجيه_إضافي>\n${extraNote}\n</توجيه_إضافي>` : ""}
-
-<النشرة_الإخبارية_الخام>
+${examplesBlock ? `${examplesBlock}\n\n---\n` : ""}النص الإخباري المطلوب تفكيكه وتحويله إلى شريط إخباري الآن:
+"""
 ${rawBulletin}
-</النشرة_الإخبارية_الخام>
+"""
 
-<تنسيق_الإخراج_الإجباري>
-${separatorInstruction}
-أخرج الشريط النهائي كاملاً مباشرة دون أي مقدمات أو شروحات أو تعليقات.
-</تنسيق_الإخراج_الإجباري>`;
+تحذير حاسم: لا تكتب أي قاعدة أو عنوان أو مقدمة أو شرح؛ ابدأ السطر الأول فوراً بأول فقرة خبرية مستخرجة من النص أعلاه فقط:`;
 }
 
 function buildProofreaderPrompt(rawText, draftText, mode) {
@@ -568,8 +566,8 @@ async function runTickerWorkflow() {
 
   const btn = document.getElementById("runTickerBtn");
   const twoStage = document.getElementById("tickerTwoStage").checked;
-  const pEng = document.getElementById("primaryEngineSelect").value;
-  const pMod = document.getElementById("primaryModelSelect").value;
+  const pEng = (document.getElementById("tickerEngineSelect") || document.getElementById("primaryEngineSelect")).value;
+  const pMod = (document.getElementById("tickerModelSelect") || document.getElementById("primaryModelSelect")).value;
 
   btn.disabled = true;
   try {
@@ -598,6 +596,28 @@ const TICKER_BITMAP_TAG = "<BITMAP>E:\\NEWS\\Logo.png</BITMAP>";
 function toWesternDigitsAndSpaced(line) {
   const arNums = "٠١٢٣٤٥٦٧٨٩";
   let s = line.replace(/[٠-٩]/g, d => String(arNums.indexOf(d)));
+
+  // Convert standalone written cardinal numbers to digits for Ticker Rule 8 (preserving words like "واحدة" or "عشرات")
+  const wordToNum = [
+    ["أحد عشر", "11"], ["احد عشر", "11"], ["إحدى عشرة", "11"],
+    ["اثنا عشر", "12"], ["اثني عشر", "12"], ["اثنتا عشرة", "12"], ["اثنتي عشرة", "12"],
+    ["ثلاثة عشر", "13"], ["ثلاث عشرة", "13"], ["أربعة عشر", "14"], ["أربع عشرة", "14"],
+    ["خمسة عشر", "15"], ["خمس عشرة", "15"], ["ستة عشر", "16"], ["ست عشرة", "16"],
+    ["سبعة عشر", "17"], ["سبع عشرة", "17"], ["ثمانية عشر", "18"], ["ثماني عشرة", "18"],
+    ["تسعة عشر", "19"], ["تسع عشرة", "19"],
+    ["عشرون", "20"], ["عشرين", "20"], ["ثلاثون", "30"], ["ثلاثين", "30"],
+    ["أربعون", "40"], ["أربعين", "40"], ["خمسون", "50"], ["خمسين", "50"],
+    ["ستون", "60"], ["ستين", "60"], ["سبعون", "70"], ["سبعين", "70"],
+    ["ثمانون", "80"], ["ثمانين", "80"], ["تسعون", "90"], ["تسعين", "90"],
+    ["ثلاثة", "3"], ["ثلاث", "3"], ["أربعة", "4"], ["أربع", "4"],
+    ["خمسة", "5"], ["خمس", "5"], ["ستة", "6"], ["سبعة", "7"], ["سبع", "7"],
+    ["ثمانية", "8"], ["ثماني", "8"], ["تسعة", "9"], ["تسع", "9"], ["عشرة", "10"]
+  ];
+  wordToNum.forEach(([w, num]) => {
+    const re = new RegExp(`(^|\\s)${w}(?=\\s+[أ-ي])`, "g");
+    s = s.replace(re, `$1${num}`);
+  });
+
   // Ensure space before and after numbers inside sentence ("استشهاد 5 مدنيين")
   s = s.replace(/([^\s\d("«\-])(\d+)/g, "$1 $2");
   s = s.replace(/(\d+)([^\s\d)"».,%:\-])/g, "$1 $2");
@@ -606,6 +626,7 @@ function toWesternDigitsAndSpaced(line) {
 
 function extractPureTickerParagraphs(txt) {
   const tvCueExact = /^(lvo|ss|ss\s*-\s*lvo|vt|clip|vb|مشاهد|\[مشاهد\]|\(مشاهد\))$/i;
+  const leakedRuleLine = /^(<\/?قواعد|<\/?ضوابط|<\/?تنسيق|<\/?النشرة|<\/?أمثلة|الهدف العام\s*:|حجم الشريط\s*:|طريقة التفكيك|طول الفقرة|الفاعل أولاً\s*:|تفكيك التصريحات\s*:|قاعدة المتحدث العسكري|الأرقام بالرموز دائماً|صيغ الشهداء والجرحى\s*:|المصطلحات الثابتة المعتمدة|ضوابط الترقيم والشكل|تجاهل وحذف عناصر الإخراج|الفاصل الإجباري للبث|الأسلوب الخبري الصرف|التعليمات الإلزامية للتنفيذ|تحذير حاسم\s*:|أنت محرر شريط إخباري)/i;
   return String(txt || "")
     .replace(/&lt;BITMAP&gt;.*?&lt;\/BITMAP&gt;/gi, "")
     .replace(/<BITMAP>.*?<\/BITMAP>/gi, "")
@@ -618,7 +639,7 @@ function extractPureTickerParagraphs(txt) {
         .replace(/\b(Ss\s*-\s*lvo|lvo|Vt|Clip|Vb)\b/gi, "")
         .replace(/\.+\s*$/, "")
         .trim();
-      if (!l || tvCueExact.test(l)) return "";
+      if (!l || tvCueExact.test(l) || leakedRuleLine.test(l)) return "";
       return toWesternDigitsAndSpaced(l);
     })
     .filter(Boolean);
@@ -656,8 +677,8 @@ async function runSecondPassProofreadOnly(mode) {
   const draft = document.getElementById(outId).value.trim();
   if (!draft) { showToast("⚠️ لا يوجد نص لتدقيقه!"); return; }
 
-  const pEng = document.getElementById("primaryEngineSelect").value;
-  const pMod = document.getElementById("primaryModelSelect").value;
+  const pEng = (isTicker ? document.getElementById("tickerEngineSelect") : document.getElementById("primaryEngineSelect")).value;
+  const pMod = (isTicker ? document.getElementById("tickerModelSelect") : document.getElementById("primaryModelSelect")).value;
   const barId = isTicker ? "tickerStatusBar" : "statusBar";
   const txtId = isTicker ? "tickerStatusText" : "statusText";
 
@@ -785,8 +806,8 @@ async function applyRevisionNote(mode, saveAsRule) {
     return;
   }
 
-  const pEng = document.getElementById("primaryEngineSelect").value;
-  const pMod = document.getElementById("primaryModelSelect").value;
+  const pEng = (isTicker ? document.getElementById("tickerEngineSelect") : document.getElementById("primaryEngineSelect")).value;
+  const pMod = (isTicker ? document.getElementById("tickerModelSelect") : document.getElementById("primaryModelSelect")).value;
 
   if (btnA) btnA.disabled = true;
   if (btnB) btnB.disabled = true;
@@ -1573,14 +1594,14 @@ function setupPwaFeatures() {
   // Purge any old v1-v4 PWA caches automatically so updates apply immediately!
   if ("caches" in window) {
     caches.keys().then(keys => {
-      keys.filter(k => k !== "mihbarah-pwa-v13").forEach(k => caches.delete(k));
+      keys.filter(k => k !== "mihbarah-pwa-v14").forEach(k => caches.delete(k));
     }).catch(() => {});
   }
 
   // 1. Register Service Worker
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js?v=13").then(reg => {
+      navigator.serviceWorker.register("sw.js?v=14").then(reg => {
         reg.update().catch(() => {});
       }).catch(() => {});
     });
