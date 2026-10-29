@@ -1,5 +1,17 @@
 [
   {
+    "id": "news-1793314555899-902",
+    "title": "مثال معتمد",
+    "category": "عام",
+    "file": "data/news-examples/news-1793314555899-902.json"
+  },
+  {
+    "id": "news-1793314553953-86",
+    "title": "مثال معتمد",
+    "category": "عام",
+    "file": "data/news-examples/news-1793314553953-86.json"
+  },
+  {
     "id": "example-01",
     "title": "نموذج استرشادي لقالب الخبر المعتمد (مع فاصل lvo والأرقام بالحروف)",
     "category": "ميداني",
