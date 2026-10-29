@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="assets/style.css?v=10" />
+  <link rel="stylesheet" href="assets/style.css?v=11" />
 </head>
 <body>
   <header class="topbar">
@@ -146,6 +146,8 @@
               <div class="muted-note">🌐 <strong>أو انسخ الأمر المحكم لحساباتك المجانية (تعمل في اليمن بدون VPN ✅):</strong></div>
               <div class="web-launchers">
                 <button class="btn btn-primary btn-sm" onclick="copyAndOpenWeb('news', 'https://arena.ai/?mode=direct', 'Arena.ai (اختر Claude أو GPT)')">🏆 نسخ + فتح Arena.ai (Claude & GPT) ✅</button>
+                <button class="btn btn-outline btn-sm" onclick="copyAndOpenWeb('news', 'https://copilot.microsoft.com/', 'Microsoft Copilot')">🟦 Copilot (مايكروسوفت) ✅</button>
+                <button class="btn btn-outline btn-sm" onclick="copyAndOpenWeb('news', 'https://www.meta.ai/', 'Meta AI')">🔵 Meta AI (ميتا) ✅</button>
                 <button class="btn btn-outline btn-sm" onclick="copyAndOpenWeb('news', 'https://chatgpt.com/', 'ChatGPT')">🟢 ChatGPT ✅</button>
                 <button class="btn btn-outline btn-sm" onclick="copyAndOpenWeb('news', 'https://chat.deepseek.com/', 'DeepSeek')">🔵 DeepSeek ✅</button>
                 <button class="btn btn-outline btn-sm" onclick="copyAndOpenWeb('news', 'https://chat.qwen.ai/', 'Qwen')">🔷 Qwen ✅</button>
@@ -160,7 +162,7 @@
             <div class="card-header">
               <h2 class="card-title">📰 الخبر المحرر والمدقق النهائي</h2>
               <div style="display:flex; gap:5px; flex-wrap:wrap;">
-                <button class="btn btn-accent btn-sm" onclick="pasteAndAuditOutput('editedNewsOutput')" title="بعد أن يحرر لك Claude أو GPT الخبر في Arena، اضغط هنا للصقه وتصحيح مصطلحاته وفحصه بضغطة واحدة!">📥 لصق من Arena + فحص وتصحيح</button>
+                <button class="btn btn-accent btn-sm" onclick="pasteAndAuditOutput('editedNewsOutput')" title="بعد أن يحرر لك Claude أو Copilot أو Meta أو GPT الخبر، اضغط هنا للصقه وتصحيح مصطلحاته وفحصه بضغطة واحدة!">📥 لصق النتيجة + فحص وتصحيح</button>
                 <button class="btn btn-ok btn-sm" onclick="autoFixArabicErrors('editedNewsOutput')">✨ تصحيح المصطلحات بضغطة</button>
                 <button class="btn btn-primary btn-sm" onclick="copyOutput('editedNewsOutput')">📋 نسخ للنشر</button>
               </div>
@@ -310,6 +312,8 @@
               <div class="muted-note">🌐 <strong>أو انسخ أمر تفكيك النشرة لحسابك المجاني (متوافق مع اليمن ✅):</strong></div>
               <div class="web-launchers">
                 <button class="btn btn-ticker btn-sm" onclick="copyAndOpenWeb('ticker', 'https://arena.ai/?mode=direct', 'Arena.ai (اختر Claude أو GPT)')">🏆 نسخ + فتح Arena.ai (Claude & GPT) ✅</button>
+                <button class="btn btn-outline btn-sm" onclick="copyAndOpenWeb('ticker', 'https://copilot.microsoft.com/', 'Microsoft Copilot')">🟦 Copilot (مايكروسوفت) ✅</button>
+                <button class="btn btn-outline btn-sm" onclick="copyAndOpenWeb('ticker', 'https://www.meta.ai/', 'Meta AI')">🔵 Meta AI (ميتا) ✅</button>
                 <button class="btn btn-outline btn-sm" onclick="copyAndOpenWeb('ticker', 'https://chatgpt.com/', 'ChatGPT')">🟢 ChatGPT ✅</button>
                 <button class="btn btn-outline btn-sm" onclick="copyAndOpenWeb('ticker', 'https://chat.deepseek.com/', 'DeepSeek')">🔵 DeepSeek ✅</button>
                 <button class="btn btn-outline btn-sm" onclick="copyAndOpenWeb('ticker', 'https://chat.qwen.ai/', 'Qwen')">🔷 Qwen ✅</button>
@@ -324,7 +328,7 @@
             <div class="card-header">
               <h2 class="card-title">🎞️ الشريط الإخباري المستخرج</h2>
               <div style="display:flex; gap:5px; flex-wrap:wrap;">
-                <button class="btn btn-accent btn-sm" onclick="pasteAndAuditOutput('tickerOutput')">📥 لصق من Arena + فحص</button>
+                <button class="btn btn-accent btn-sm" onclick="pasteAndAuditOutput('tickerOutput')">📥 لصق النتيجة + فحص</button>
                 <button class="btn btn-ok btn-sm" onclick="autoFixArabicErrors('tickerOutput')">✨ تصحيح المصطلحات</button>
                 <button class="btn btn-ticker btn-sm" onclick="copyFormattedTicker()">📋 نسخ الشريط</button>
                 <button class="btn btn-outline btn-sm" onclick="downloadTickerTxt()">⬇️ ملف .txt للبث</button>
@@ -556,6 +560,6 @@
   </div>
 
   <div id="toast" class="toast"></div>
-  <script src="assets/app.js?v=10"></script>
+  <script src="assets/app.js?v=11"></script>
 </body>
 </html>

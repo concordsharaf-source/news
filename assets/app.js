@@ -28,15 +28,16 @@ const ENGINES = {
     models: [
       { id: "nemotron-550b", name: "NVIDIA Nemotron 3 Ultra 550B (صياغة صحفية احترافية — بدون مفتاح ✅)" },
       { id: "gpt-oss-120b", name: "OpenAI GPT-OSS 120B (سريع جداً ~10 ثوانٍ — بدون مفتاح ✅)" },
-      { id: "llama-3.3-70b", name: "Llama 3.3 70B Instruct (بدون مفتاح ✅)" }
+      { id: "llama-3.3-70b", name: "Meta Llama 3.3 70B Instruct (نموذج ميتا الضخم — فوري بدون مفتاح ✅)" }
     ]
   },
   groq: {
-    label: "⚡ Groq المجاني (بمفتاح مجاني بدون بطاقة — عبر جسر Vercel ✅)",
+    label: "⚡ Groq المجاني (يشغّل Meta Llama 4 و GPT-120B — 1,000 طلب/يوم بدون بطاقة ✅)",
     models: [
-      { id: "openai/gpt-oss-120b", name: "OpenAI GPT-OSS 120B (فائق السرعة)" },
-      { id: "qwen/qwen3.8-27b", name: "Qwen 3.8 27B" },
-      { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B Versatile" }
+      { id: "meta-llama/llama-4-scout-17b-16e-instruct", name: "Meta Llama 4 Scout (الجيل الرابع من ميتا — 1,000 طلب/يوم مجاناً)" },
+      { id: "llama-3.3-70b-versatile", name: "Meta Llama 3.3 70B Versatile (1,000 طلب/يوم مجاناً)" },
+      { id: "openai/gpt-oss-120b", name: "OpenAI GPT-OSS 120B (1,000 طلب/يوم مجاناً)" },
+      { id: "qwen/qwen3.8-27b", name: "Qwen 3.8 27B" }
     ]
   },
   openrouter: {
@@ -1403,14 +1404,14 @@ function setupPwaFeatures() {
   // Purge any old v1-v4 PWA caches automatically so updates apply immediately!
   if ("caches" in window) {
     caches.keys().then(keys => {
-      keys.filter(k => k !== "mihbarah-pwa-v10").forEach(k => caches.delete(k));
+      keys.filter(k => k !== "mihbarah-pwa-v11").forEach(k => caches.delete(k));
     }).catch(() => {});
   }
 
   // 1. Register Service Worker
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js?v=10").then(reg => {
+      navigator.serviceWorker.register("sw.js?v=11").then(reg => {
         reg.update().catch(() => {});
       }).catch(() => {});
     });
