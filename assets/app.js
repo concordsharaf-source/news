@@ -24,11 +24,12 @@ const SafeStorage = {
 
 const ENGINES = {
   gemini: {
-    label: "🟣 Google Gemini المجاني (1500 طلب/يوم ✅)",
+    label: "🟣 Google Gemini المجاني (يعمل باليمن بدون VPN ✅)",
     models: [
-      { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash (سريع ودقيق)" },
-      { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro (الأقوى للنحو وتفكيك النشرات)" },
-      { id: "gemini-2.5-flash-lite", name: "Gemini 2.5 Flash-Lite (لحظي)" }
+      { id: "gemini-3.8-flash", name: "Gemini 3.8 Flash (الأحدث والأدق للتحرير - موصى به)" },
+      { id: "gemini-3.5-flash-lite", name: "Gemini 3.5 Flash-Lite (سريع جداً وحصة مجانية كبيرة)" },
+      { id: "gemini-3.6-flash", name: "Gemini 3.6 Flash" },
+      { id: "gemini-3.1-pro-preview", name: "Gemini 3.1 Pro (للتحليل والنشرات الضخمة)" }
     ]
   },
   groq: {
@@ -361,15 +362,25 @@ async function callModel(engine, model, promptText) {
   }
 
   if (engine === "gemini") {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-    const r = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }], generationConfig: { temperature: 0.1 } })
-    });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d?.error?.message || "تعذر الاتصال بـ Gemini API");
-    return (d?.candidates?.[0]?.content?.parts?.map(p => p.text || "").join("") || "").trim();
+    async function directGemini(targetModel) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(targetModel)}:generateContent`;
+      const r = await fetch(url, {
+        method: "POST",
+        headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
+        body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }], generationConfig: { temperature: 0.1 } })
+      });
+      const d = await r.json();
+      return { ok: r.ok, d };
+    }
+    let res = await directGemini(model);
+    if (!res.ok) {
+      const msg = res.d?.error?.message || "";
+      const m = msg.match(/models\/(gemini-[a-zA-Z0-9.-]+)/);
+      if (m && m[1] && m[1] !== model) res = await directGemini(m[1]);
+    }
+    if (!res.ok) throw new Error(res.d?.error?.message || "تعذر الاتصال بـ Gemini API");
+    const parts = res.d?.candidates?.[0]?.content?.parts || [];
+    return parts.filter(p => !p.thought).map(p => p.text || "").join("").trim();
   }
 
   const endpoint = engine === "groq" ? "https://api.groq.com/openai/v1/chat/completions" : "https://openrouter.ai/api/v1/chat/completions";

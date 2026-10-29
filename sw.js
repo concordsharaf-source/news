@@ -1,4 +1,4 @@
-const CACHE_VERSION = "mihbarah-pwa-v1";
+const CACHE_VERSION = "mihbarah-pwa-v3";
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -79,19 +79,16 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Static shell assets (CSS, JS, Icons, Manifest) -> Stale-While-Revalidate
+  // Static shell assets (CSS, JS) -> Network-First so code updates apply immediately on refresh, fallback to cache offline!
   event.respondWith(
-    caches.match(req).then((cached) => {
-      const networkFetch = fetch(req)
-        .then((res) => {
-          if (res && res.ok) {
-            const copy = res.clone();
-            caches.open(CACHE_VERSION).then((cache) => cache.put(req, copy));
-          }
-          return res;
-        })
-        .catch(() => cached);
-      return cached || networkFetch;
-    })
+    fetch(req)
+      .then((res) => {
+        if (res && res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE_VERSION).then((cache) => cache.put(req, copy));
+        }
+        return res;
+      })
+      .catch(() => caches.match(req))
   );
 });
