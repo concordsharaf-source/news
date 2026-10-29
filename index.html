@@ -14,20 +14,21 @@
         <div class="brand-icon">م</div>
         <div>
           <h1>مِحْبَرَة الأخبار والشريط الإخباري</h1>
-          <small>بنية ملفات مفصولة عالية السرعة (Vercel + GitHub) — متوافقة مع اليمن بدون VPN</small>
+          <small>القالب التحريري المعتمد (lvo + الأرقام بالحروف + المصطلحات الثابتة) — متوافق مع اليمن</small>
         </div>
       </div>
 
       <nav class="nav-tabs">
         <button class="tab-btn active" onclick="switchTab('editor', this)">📰 تحرير خبر</button>
         <button class="tab-btn ticker-tab" onclick="switchTab('ticker', this)">📺 النشرة ⬅ شريط إخباري</button>
-        <button class="tab-btn" onclick="switchTab('rules', this)">📜 القواعد <span class="badge" id="rulesCountBadge">0</span></button>
+        <button class="tab-btn" onclick="switchTab('rules', this)">📜 القواعد (+ إضافة تباعاً) <span class="badge" id="rulesCountBadge">0</span></button>
         <button class="tab-btn" onclick="switchTab('examples', this)">🎯 بنك الأمثلة <span class="badge" id="examplesCountBadge">0</span></button>
-        <button class="tab-btn" onclick="switchTab('dictionary', this)">🔎 القاموس اللغوي</button>
-        <button class="tab-btn" onclick="switchTab('engines', this)">⚡ الربط المجاني</button>
+        <button class="tab-btn" onclick="switchTab('dictionary', this)">🔎 القاموس والمصطلحات</button>
+        <button class="tab-btn" onclick="switchTab('engines', this)">⚡ الربط والمزامنة</button>
       </nav>
 
       <div class="top-actions">
+        <button class="icon-btn" onclick="syncToGitHubRepo()" title="رفع أي قواعد أو مصطلحات جديدة أضفتها هنا مباشرة إلى مستودع GitHub لتتحدث على Vercel">☁️ حفظ في GitHub</button>
         <button class="icon-btn" onclick="exportBackup()">💾 تصدير JSON</button>
         <button class="icon-btn" onclick="document.getElementById('importFile').click()">📂 استيراد</button>
         <input type="file" id="importFile" accept=".json" style="display:none" onchange="importBackup(event)" />
@@ -51,45 +52,44 @@
               </div>
             </div>
 
-            <textarea id="rawNewsInput" rows="8" placeholder="الصق الخبر الخام هنا... تُسحب القواعد والأمثلة تلقائياً من ملفات البيانات المفصولة بسرعة فائقة!" oninput="updateRawStats(); runQualityRadar();"></textarea>
+            <textarea id="rawNewsInput" rows="8" placeholder="الصق الخبر الخام هنا... سيتم تطبيق القالب المعتمد (المنطقة + كبشن 10 كلمات + المقدمة + lvo + وأفادت مصادر + وأضافت المصادر + الخاتمة) وتحويل الأرقام للحروف وضبط المصطلحات تلقائياً!" oninput="updateRawStats(); runQualityRadar();"></textarea>
             <div style="display:flex; justify-content:space-between; margin-top:5px;" class="muted-note">
               <span id="rawStats">0 كلمة | 0 حرف</span>
-              <span>ملفات الأمثلة تُحمَّل عند الطلب فقط (Lazy-Load) لمنع أي بطء</span>
+              <span>جميع القواعد الـ 23 المعتمدة مفعّلة تلقائياً</span>
             </div>
 
             <hr style="border:none; border-top:1px solid var(--border); margin:12px 0;" />
 
-            <label>1️⃣ قالب التحرير المطلوب:</label>
+            <label>1️⃣ القالب التحريري المطلوب:</label>
             <div class="pills" id="formatPills">
-              <button class="pill active" onclick="selectFormat('standard', this)">📰 خبر صحفي قياسي</button>
-              <button class="pill" onclick="selectFormat('breaking', this)">⚡ عاجل مقتضب</button>
-              <button class="pill" onclick="selectFormat('report', this)">📊 تقرير موسّع</button>
-              <button class="pill" onclick="selectFormat('social', this)">📱 منصات وتيليجرام</button>
-              <button class="pill" onclick="selectFormat('headlines', this)">🏷️ 5 عناوين</button>
-              <button class="pill" onclick="selectFormat('proofread', this)">🩺 تدقيق لغوي فقط</button>
+              <button class="pill active" onclick="selectFormat('lvo_standard', this)">📺 القالب المعتمد الكامل (مع فاصل lvo)</button>
+              <button class="pill" onclick="selectFormat('short_news', this)">📰 خبر مختصر (بدون lvo)</button>
+              <button class="pill" onclick="selectFormat('breaking', this)">⚡ كبشن / عاجل (10 كلمات)</button>
+              <button class="pill" onclick="selectFormat('proofread', this)">🩺 تدقيق لغوي ومصطلحات فقط</button>
             </div>
 
             <div class="row-2" style="margin-bottom:10px;">
               <div>
-                <label>2️⃣ تصنيف الخبر:</label>
+                <label>2️⃣ الجبهة / التصنيف (يضبط المصطلحات تلقائياً):</label>
                 <select id="newsCategory">
-                  <option value="all">تلقائي (أفضل الأمثلة)</option>
-                  <option value="سياسي">سياسي ودبلوماسي</option>
-                  <option value="ميداني">ميداني وأمني</option>
-                  <option value="اقتصادي">اقتصادي وتنموي</option>
-                  <option value="محلي">محلي وخدمي</option>
+                  <option value="all">تلقائي من سياق الخبر</option>
+                  <option value="غزة">قطاع غزة (قوات العدو الصهيوني / حرب إبادة)</option>
+                  <option value="الضفة">الضفة الغربية (قوات الاحتلال الصهيوني / بلا أسماء معتقلين)</option>
+                  <option value="لبنان">جنوب لبنان / جبهات الإسناد</option>
+                  <option value="ميداني">ميداني عام</option>
+                  <option value="سياسي">سياسي ودولي</option>
                 </select>
               </div>
               <div>
-                <label>3️⃣ توجيه خاص لهذا الخبر (اختياري):</label>
-                <input type="text" id="extraNote" placeholder="مثال: ركّز على تصريح الوزير" />
+                <label>3️⃣ توجيه خاص لهذا الخبر فقط (اختياري):</label>
+                <input type="text" id="extraNote" placeholder="مثال: استهل بـ «وأفادت مصادر طبية»" />
               </div>
             </div>
 
             <div class="radar-box" style="margin-bottom:12px;">
               <div class="row-2" style="margin-bottom:8px;">
                 <div>
-                  <label>المحرك المجاني (يمر عبر جسر Vercel لتجاوز الحجب باليمن):</label>
+                  <label>المحرك المجاني (عبر جسر Vercel لليمن ✅):</label>
                   <select id="primaryEngineSelect" onchange="updateModelDropdown('primary')"></select>
                 </div>
                 <div>
@@ -99,7 +99,7 @@
               </div>
               <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text); margin-top:4px;">
                 <input type="checkbox" id="twoStageToggle" checked style="width:16px; height:16px;" />
-                <span>🛡️ <strong>نظام المرحلتين الصارم:</strong> صياغة الخبر ثم <strong>مراجعة لغوية وإملائية ثانية</strong></span>
+                <span>🛡️ <strong>نظام المرحلتين الصارم:</strong> صياغة وفق القالب (lvo) ثم <strong>مراجعة لغوية وفحص الأرقام بالحروف والمصطلحات</strong></span>
               </label>
               <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text); margin-top:4px;">
                 <input type="checkbox" id="compareModeToggle" onchange="toggleCompareUI()" style="width:16px; height:16px;" />
@@ -119,7 +119,7 @@
 
             <div style="display:flex; flex-wrap:wrap; gap:8px;">
               <button class="btn btn-primary" id="runAiBtn" style="flex:1; min-width:200px;" onclick="runEditorialWorkflow()">
-                🚀 حرّر الخبر ودقّقه الآن
+                🚀 حرّر الخبر بالقالب المعتمد الآن
               </button>
               <button class="btn btn-accent" onclick="copyCompiledPrompt('news')">
                 📋 نسخ الأمر الشامل
@@ -127,7 +127,7 @@
             </div>
 
             <div style="margin-top:11px; padding-top:10px; border-top:1px solid var(--border);">
-              <div class="muted-note">🌐 <strong>أزرار الفتح السريع لحساباتك المجانية (تعمل في اليمن بدون VPN ✅):</strong></div>
+              <div class="muted-note">🌐 <strong>أو انسخ الأمر المحكم لحساباتك المجانية (تعمل في اليمن بدون VPN ✅):</strong></div>
               <div class="web-launchers">
                 <button class="btn btn-outline btn-sm" onclick="copyAndOpenWeb('news', 'https://gemini.google.com/app', 'Gemini')">🟣 Gemini ✅</button>
                 <button class="btn btn-outline btn-sm" onclick="copyAndOpenWeb('news', 'https://chat.deepseek.com/', 'DeepSeek')">🔵 DeepSeek ✅</button>
@@ -144,8 +144,8 @@
             <div class="card-header">
               <h2 class="card-title">📰 الخبر المحرر والمدقق النهائي</h2>
               <div style="display:flex; gap:5px; flex-wrap:wrap;">
-                <button class="btn btn-ok btn-sm" onclick="autoFixArabicErrors('editedNewsOutput')">✨ تصحيح الإملاء بضغطة</button>
-                <button class="btn btn-outline btn-sm" onclick="runSecondPassProofreadOnly('news')">🩺 تدقيق لغوي ثانٍ</button>
+                <button class="btn btn-ok btn-sm" onclick="autoFixArabicErrors('editedNewsOutput')" title="يصلح تلقائياً: مائة ومشتقاتها، إسرائيلي->صهيوني، جراء->نتيجة، إلى جانب->إضافة إلى، الأشهر السريانية، والهمزات!">✨ تصحيح المصطلحات والإملاء بضغطة</button>
+                <button class="btn btn-outline btn-sm" onclick="runSecondPassProofreadOnly('news')">🩺 مراجعة ثانية</button>
                 <button class="btn btn-primary btn-sm" onclick="copyOutput('editedNewsOutput')">📋 نسخ للنشر</button>
               </div>
             </div>
@@ -171,27 +171,28 @@
               </div>
             </div>
 
-            <textarea id="editedNewsOutput" rows="10" placeholder="الخبر المحرر النهائي يظهر هنا..." oninput="runQualityRadar()"></textarea>
+            <textarea id="editedNewsOutput" rows="12" placeholder="الخبر المحرر بالقالب المعتمد (ترويسة المنطقة + كبشن + مقدمة + lvo + تفاصيل + خاتمة) يظهر هنا..." oninput="runQualityRadar()"></textarea>
 
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-top:7px;">
               <span id="editedStats" class="muted-note">0 كلمة | 0 حرف</span>
               <div style="display:flex; gap:6px; flex-wrap:wrap;">
-                <button class="btn btn-outline btn-sm" onclick="sendEditedNewsToTicker()">📺 فكّك لشريط</button>
-                <button class="btn btn-warn btn-sm" onclick="saveCurrentNewsAsExample()">⭐ حفظ في أمثلتي</button>
+                <button class="btn btn-outline btn-sm" onclick="sendEditedNewsToTicker()">📺 أرسل للشريط الإخباري</button>
+                <button class="btn btn-warn btn-sm" onclick="saveCurrentNewsAsExample()">⭐ حفظ كمثال معتمد</button>
               </div>
             </div>
 
+            <!-- Strict Editorial Policy Radar -->
             <div class="radar-box">
               <div style="display:flex; justify-content:space-between; align-items:center;">
-                <strong style="font-size:0.88rem;">🛡️ رادار مطابقة الأرقام والسلامة اللغوية</strong>
+                <strong style="font-size:0.88rem;">🛡️ رادار الالتزام بالسياسة التحريرية (القالب + الأرقام بالحروف + المصطلحات + الإملاء)</strong>
                 <span id="radarSummaryBadge" class="chip chip-ok">جاهز</span>
               </div>
               <div style="margin-top:8px;">
-                <div class="muted-note">🔢 <strong>أمان الأرقام والتواريخ:</strong></div>
-                <div class="chip-list" id="numberGuardChips"></div>
+                <div class="muted-note">📐 <strong>فحص القالب الفني (فاصل lvo، الكبشن، الأرقام بالحروف، المائة):</strong></div>
+                <div class="chip-list" id="structureGuardChips"></div>
               </div>
               <div style="margin-top:8px; padding-top:8px; border-top:1px dashed var(--border);">
-                <div class="muted-note">✍️ <strong>فحص الهمزات والإملاء والممنوعات:</strong></div>
+                <div class="muted-note">✍️ <strong>فحص المصطلحات الثابتة والممنوعات الزمنية/الجغرافية والإملاء:</strong></div>
                 <div class="chip-list" id="orthographyChips"></div>
               </div>
             </div>
@@ -214,10 +215,10 @@
               </div>
             </div>
 
-            <textarea id="rawBulletinInput" rows="11" placeholder="الصق النشرة الخام الكاملة هنا... سيقوم النظام بتفكيكها إلى فقرات شريط إخباري مستقلة المعنى ومضبوطة الطول وفق قواعدك ونماذج نشراتك المحفوظة!" oninput="updateBulletinStats(); runTickerRadar();"></textarea>
+            <textarea id="rawBulletinInput" rows="11" placeholder="الصق النشرة الخام الكاملة هنا لتفكيكها إلى فقرات شريط إخباري وفق قواعد الشريط المعتمدة لديك!" oninput="updateBulletinStats(); runTickerRadar();"></textarea>
             <div style="display:flex; justify-content:space-between; margin-top:5px;" class="muted-note">
               <span id="bulletinStats">0 كلمة | 0 حرف</span>
-              <span>تُسحب أمثلة النشرات من ملفات منفصلة عند التنفيذ فقط</span>
+              <span>جاهز لاستقبال قواعد الشريط الإخباري الخاصة بك أيضاً!</span>
             </div>
 
             <hr style="border:none; border-top:1px solid var(--border); margin:12px 0;" />
@@ -247,12 +248,12 @@
 
             <div style="margin-bottom:11px;">
               <label>توجيه إضافي خاص بهذه النشرة (اختياري):</label>
-              <input type="text" id="tickerExtraNote" placeholder="مثال: استبعد الأخبار الرياضية" />
+              <input type="text" id="tickerExtraNote" placeholder="مثال: ركّز على الأخبار الميدانية أولاً" />
             </div>
 
             <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text); margin-bottom:12px;">
               <input type="checkbox" id="tickerTwoStage" checked style="width:16px; height:16px;" />
-              <span>🛡️ <strong>مراجعة لغوية وفحص استقلالية الفقرات (مرحلتان)</strong></span>
+              <span>🛡️ <strong>مراجعة لغوية وفحص استقلالية الفقرات والمصطلحات الثابتة (مرحلتان)</strong></span>
             </label>
 
             <div style="display:flex; flex-wrap:wrap; gap:8px;">
@@ -282,8 +283,8 @@
             <div class="card-header">
               <h2 class="card-title">🎞️ الشريط الإخباري المستخرج</h2>
               <div style="display:flex; gap:5px; flex-wrap:wrap;">
-                <button class="btn btn-ok btn-sm" onclick="autoFixArabicErrors('tickerOutput')">✨ تصحيح الإملاء</button>
-                <button class="btn btn-outline btn-sm" onclick="runSecondPassProofreadOnly('ticker')">🩺 تدقيق لغوي ثانٍ</button>
+                <button class="btn btn-ok btn-sm" onclick="autoFixArabicErrors('tickerOutput')">✨ تصحيح المصطلحات والإملاء</button>
+                <button class="btn btn-outline btn-sm" onclick="runSecondPassProofreadOnly('ticker')">🩺 تدقيق ثانٍ</button>
                 <button class="btn btn-ticker btn-sm" onclick="copyFormattedTicker()">📋 نسخ الشريط</button>
                 <button class="btn btn-outline btn-sm" onclick="downloadTickerTxt()">⬇️ ملف .txt للبث</button>
               </div>
@@ -305,7 +306,7 @@
 
             <div class="radar-box">
               <div style="display:flex; justify-content:space-between; align-items:center;">
-                <strong style="font-size:0.88rem;">🛡️ فاحص فقرات الشريط (الطول + الاستقلالية + الأرقام + الإملاء)</strong>
+                <strong style="font-size:0.88rem;">🛡️ فاحص فقرات الشريط (الطول + الاستقلالية + المصطلحات + الإملاء)</strong>
                 <span id="tickerRadarBadge" class="chip chip-ok">بانتظار الشريط</span>
               </div>
               <div class="chip-list" id="tickerAlertsChips"></div>
@@ -319,33 +320,49 @@
       </div>
     </section>
 
-    <!-- TAB 3: RULES -->
+    <!-- TAB 3: RULES (+ ADDING NEW RULES OVER TIME) -->
     <section id="tab-rules" class="tab-panel">
       <div class="pills" style="margin-bottom:14px;">
-        <button class="pill active" id="ruleSubNewsBtn" onclick="switchRuleSub('news')">📰 قواعد تحرير الأخبار</button>
-        <button class="pill" id="ruleSubTickerBtn" onclick="switchRuleSub('ticker')">📺 قواعد الشريط الإخباري وتفكيك النشرات</button>
+        <button class="pill active" id="ruleSubNewsBtn" onclick="switchRuleSub('news')">📰 قواعد تحرير الأخبار المعتمدة</button>
+        <button class="pill" id="ruleSubTickerBtn" onclick="switchRuleSub('ticker')">📺 قواعد تفكيك النشرة والشريط الإخباري</button>
       </div>
       <div class="grid-2">
         <div class="card">
-          <h2 class="card-title" id="ruleFormTitle" style="margin-bottom:8px;">➕ إضافة قواعد تحرير الأخبار</h2>
-          <label>إضافة قاعدة واحدة:</label>
+          <h2 class="card-title" id="ruleFormTitle" style="margin-bottom:6px;">➕ إضافة قواعد جديدة تباعاً</h2>
+          <p class="muted-note">أضف أي قاعدة أو ملاحظة جديدة تظهر معك أثناء العمل في أي وقت؛ تُحفظ فوراً في متصفحك، وبضغطة زر «☁️ حفظ في GitHub» بالأعلى تُرفع مباشرة لملف المستودع وتتحدث على Vercel لكل أجهزتك!</p>
+
+          <label>تصنيف القاعدة الجديدة:</label>
+          <select id="ruleCategoryInput" style="margin-bottom:10px;">
+            <option value="قواعد مضافة حديثاً">قواعد وتعديلات إضافية</option>
+            <option value="الهيكل والقالب الفني">الهيكل والقالب الفني</option>
+            <option value="المبادئ والصياغة">المبادئ والصياغة</option>
+            <option value="المصطلحات الثابتة">المصطلحات الثابتة</option>
+            <option value="الأرقام والزمن والاتجاهات">الأرقام والزمن والاتجاهات</option>
+            <option value="التدقيق اللغوي والإملائي">التدقيق اللغوي والإملائي</option>
+          </select>
+
+          <label>إضافة قاعدة سريعة واحدة:</label>
           <div style="display:flex; gap:8px; margin-bottom:14px;">
-            <input type="text" id="singleRuleInput" placeholder="اكتب القاعدة هنا..." onkeydown="if(event.key==='Enter') addSingleRule()" />
-            <button class="btn btn-primary" onclick="addSingleRule()">إضافة</button>
+            <input type="text" id="singleRuleInput" placeholder="اكتب القاعدة الجديدة هنا واضغط Enter..." onkeydown="if(event.key==='Enter') addSingleRule()" />
+            <button class="btn btn-primary" onclick="addSingleRule()">➕ إضافة</button>
           </div>
-          <label>📥 أو الصق قواعدك دفعة واحدة (كل سطر = قاعدة):</label>
-          <textarea id="bulkRulesInput" rows="7"></textarea>
+
+          <hr style="border:none; border-top:1px solid var(--border); margin:14px 0;" />
+
+          <label>📥 أو الصق مجموعة قواعد جديدة دفعة واحدة (كل سطر = قاعدة):</label>
+          <textarea id="bulkRulesInput" rows="6" placeholder="الصق أي قواعد جديدة هنا ليتم ضمّها مباشرة..."></textarea>
           <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
-            <button class="btn btn-primary" onclick="addBulkRules(false)">➕ إضافة فوق الحالية</button>
-            <button class="btn btn-warn" onclick="addBulkRules(true)">🔄 استبدال بقواعدي فقط</button>
+            <button class="btn btn-primary" onclick="addBulkRules(false)">➕ ضمّها إلى القواعد الحالية</button>
+            <button class="btn btn-warn" onclick="addBulkRules(true)">🔄 استبدال الكل بهذه القائمة</button>
           </div>
         </div>
+
         <div class="card">
           <div class="card-header">
-            <h2 class="card-title">📜 القواعد المفعّلة</h2>
-            <button class="btn btn-outline btn-sm" onclick="resetCurrentRules()">استعادة ملفات المستودع الأصلية</button>
+            <h2 class="card-title">📜 سجل القواعد المفعّلة (يمكنك تعديل أو إيقاف أي قاعدة)</h2>
+            <button class="btn btn-outline btn-sm" onclick="resetCurrentRules()">استعادة نسخة المستودع</button>
           </div>
-          <div id="rulesListContainer"></div>
+          <div id="rulesListContainer" style="max-height:580px; overflow-y:auto;"></div>
         </div>
       </div>
     </section>
@@ -358,31 +375,33 @@
       </div>
       <div class="grid-2">
         <div class="card">
-          <h2 class="card-title" style="margin-bottom:8px;">🎯 إضافة مثال سريع من المتصفح</h2>
+          <h2 class="card-title" style="margin-bottom:8px;">🎯 إضافة نموذج تدريبي جديد (خام ⬅ معتمد)</h2>
+          <p class="muted-note">كل مثال تضيفه يمكن حفظه في متصفحك أو رفعه كملف JSON منفصل تلقائياً في مستودعك عبر زر «☁️ حفظ في GitHub»!</p>
           <div class="row-2" style="margin-bottom:10px;">
             <div>
               <label>عنوان المثال:</label>
-              <input type="text" id="exTitleInput" placeholder="مثال: نشرة المساء وتفكيكها" />
+              <input type="text" id="exTitleInput" placeholder="مثال: خبر ميداني غزة مع lvo" />
             </div>
             <div id="exCatWrapper">
-              <label>تصنيف المثال:</label>
+              <label>الجبهة / التصنيف:</label>
               <select id="exCategoryInput">
                 <option value="عام">عام</option>
-                <option value="سياسي">سياسي ودبلوماسي</option>
-                <option value="ميداني">ميداني وأمني</option>
-                <option value="اقتصادي">اقتصادي وتنموي</option>
-                <option value="محلي">محلي وخدمي</option>
+                <option value="غزة">قطاع غزة</option>
+                <option value="الضفة">الضفة الغربية</option>
+                <option value="لبنان">جنوب لبنان</option>
+                <option value="ميداني">ميداني</option>
+                <option value="سياسي">سياسي ودولي</option>
               </select>
             </div>
           </div>
-          <label id="exRawLabel">1. النص الخام:</label>
+          <label id="exRawLabel">1. النص الخام (قبل التحرير):</label>
           <textarea id="exRawInput" rows="5"></textarea>
-          <label id="exEditedLabel" style="margin-top:10px;">2. النسخة المعتمدة:</label>
-          <textarea id="exEditedInput" rows="5"></textarea>
-          <button class="btn btn-primary" style="margin-top:12px; width:100%;" onclick="addExamplePair()">💾 حفظ</button>
+          <label id="exEditedLabel" style="margin-top:10px;">2. الصياغة المعتمدة لديك (بعد التحرير):</label>
+          <textarea id="exEditedInput" rows="6"></textarea>
+          <button class="btn btn-primary" style="margin-top:12px; width:100%;" onclick="addExamplePair()">💾 حفظ المثال</button>
         </div>
         <div class="card">
-          <h2 class="card-title" style="margin-bottom:10px;">📚 فهرس الأمثلة (تُحمَّل تفاصيل كل ملف عند الطلب فقط)</h2>
+          <h2 class="card-title" style="margin-bottom:10px;">📚 فهرس الأمثلة المنفصلة (تُحمَّل عند الطلب لمنع البطء)</h2>
           <div id="examplesListContainer"></div>
         </div>
       </div>
@@ -392,43 +411,44 @@
     <section id="tab-dictionary" class="tab-panel">
       <div class="grid-2">
         <div class="card">
-          <h2 class="card-title" style="margin-bottom:8px;">➕ إضافة تصويب لغوي أو كلمة ممنوعة</h2>
+          <h2 class="card-title" style="margin-bottom:8px;">➕ إضافة مصطلح بديل أو تصويب ثابت جديد</h2>
+          <p class="muted-note">يُضاف فوراً إلى قاموس المصطلحات الثابتة (مثل: جراء ⬅ نتيجة، إسرائيلي ⬅ صهيوني، مئة ⬅ مائة...).</p>
           <div class="row-2" style="margin-bottom:10px;">
             <div>
-              <label>الكلمة الخاطئة / الممنوعة:</label>
-              <input type="text" id="dictBadInput" />
+              <label>المصطلح الممنوع / الخطأ:</label>
+              <input type="text" id="dictBadInput" placeholder="مثال: إلى جانب" />
             </div>
             <div>
-              <label>الصواب المعتمد:</label>
-              <input type="text" id="dictGoodInput" />
+              <label>المصطلح المعتمد:</label>
+              <input type="text" id="dictGoodInput" placeholder="مثال: إضافة إلى" />
             </div>
           </div>
           <button class="btn btn-primary" onclick="addDictItem()">➕ إضافة للقاموس</button>
         </div>
         <div class="card">
-          <h2 class="card-title" style="margin-bottom:10px;">🔎 قاموس الضبط الإملائي النشط</h2>
-          <div id="dictListContainer" style="max-height:460px; overflow-y:auto;"></div>
+          <h2 class="card-title" style="margin-bottom:10px;">🔎 قاموس المصطلحات الثابتة والتصويبات اللغوية النشط</h2>
+          <div id="dictListContainer" style="max-height:480px; overflow-y:auto;"></div>
         </div>
       </div>
     </section>
 
-    <!-- TAB 6: ENGINES -->
+    <!-- TAB 6: ENGINES & GITHUB DIRECT SYNC -->
     <section id="tab-engines" class="tab-panel">
       <div class="card">
-        <h2 class="card-title" style="margin-bottom:8px;">⚡ إعداد المحركات المجانية (مع جسر Vercel المدمج لليمن بدون VPN!)</h2>
+        <h2 class="card-title" style="margin-bottom:8px;">⚡ إعداد المحركات المجانية + مزامنة GitHub المباشرة</h2>
         <p class="muted-note" style="margin-bottom:16px;">
-          مفاجأة سارة لنشرك على <strong>Vercel</strong>: أضفتُ لك داخل المشروع خادماً وسيطاً خفيفاً (<code>/api/ai.js</code>) يعمل على خوادم Vercel في الخارج؛ ما يعني أن طلبات <strong>Groq و OpenRouter و Gemini</strong> تمر عبر سيرفر Vercel فـ <strong>تتجاوز الحجب الجغرافي في اليمن تلقائياً بدون VPN</strong> ودون حفظ أي مفتاح في الكود!
+          جميع المفاتيح تحفظ محلياً في متصفحك أنت فقط ولا تُرسل إلى الكود العام أبداً.
         </p>
 
         <div class="grid-2">
           <div class="radar-box" style="margin-top:0; border-color: var(--ok);">
-            <h3 style="margin:0 0 6px; font-size:0.96rem; color: var(--ok);">1️⃣ مفتاح Google Gemini المجاني (1,500 طلب/يوم بحساب Gmail فقط)</h3>
-            <p class="muted-note">من: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:var(--primary); font-weight:bold;">aistudio.google.com/apikey</a></p>
+            <h3 style="margin:0 0 6px; font-size:0.96rem; color: var(--ok);">1️⃣ مفتاح Google Gemini المجاني (1,500 طلب/يوم بحساب Gmail فقط ✅)</h3>
+            <p class="muted-note">يعمل رسمياً في اليمن بدون VPN: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:var(--primary); font-weight:bold;">aistudio.google.com/apikey</a></p>
             <input type="password" id="geminiKeyInput" placeholder="AIza..." oninput="saveApiKeys()" />
           </div>
 
           <div class="radar-box" style="margin-top:0;">
-            <h3 style="margin:0 0 6px; font-size:0.96rem;">2️⃣ مفتاح Groq المجاني (يعمل الآن في اليمن عبر جسر Vercel!)</h3>
+            <h3 style="margin:0 0 6px; font-size:0.96rem;">2️⃣ مفتاح Groq المجاني (يعمل من اليمن عبر جسر Vercel ✅)</h3>
             <p class="muted-note">من: <a href="https://console.groq.com/keys" target="_blank" rel="noopener" style="color:var(--primary); font-weight:bold;">console.groq.com/keys</a></p>
             <input type="password" id="groqKeyInput" placeholder="gsk_..." oninput="saveApiKeys()" />
           </div>
@@ -439,9 +459,12 @@
             <input type="password" id="openrouterKeyInput" placeholder="sk-or-..." oninput="saveApiKeys()" />
           </div>
 
-          <div class="radar-box" style="margin-top:0;">
-            <h3 style="margin:0 0 6px; font-size:0.96rem;">4️⃣ وسيط Puter السحابي المجاني (لتشغيل Claude Sonnet بدون مفتاح)</h3>
-            <p class="muted-note">جاهز تلقائياً في القائمة المنسدلة دون أي مفتاح.</p>
+          <div class="radar-box" style="margin-top:0; border-color: var(--accent);">
+            <h3 style="margin:0 0 6px; font-size:0.96rem; color: var(--accent);">4️⃣ مزامنة القواعد والأمثلة الجديدة مباشرة إلى GitHub (اختياري)</h3>
+            <p class="muted-note">
+              إذا وضعتَ توكن GitHub الخاص بمستودع <code>concordsharaf-source/news</code> هنا في متصفحك، فكلما أضفتَ قاعدة جديدة أو مثالاً جديداً وضغطتَ زر <strong>«☁️ حفظ في GitHub»</strong> بالأعلى، سيُحفظ تلقائياً في ملفات المستودع المنفصلة ويتحدث على Vercel لكل أجهزتك!
+            </p>
+            <input type="password" id="githubTokenInput" placeholder="ghp_... أو github_pat_..." oninput="saveApiKeys()" />
           </div>
         </div>
       </div>
@@ -449,12 +472,12 @@
   </main>
 
   <div id="promptModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:200; padding:24px; overflow-y:auto;">
-    <div class="card" style="max-width:840px; margin:26px auto;">
+    <div class="card" style="max-width:860px; margin:26px auto;">
       <div class="card-header">
-        <h3 class="card-title">👁️ معاينة الأمر المُجمّع</h3>
+        <h3 class="card-title">👁️ معاينة الأمر التحريري المُجمّع</h3>
         <button class="btn btn-outline btn-sm" onclick="document.getElementById('promptModal').style.display='none'">إغلاق ✖</button>
       </div>
-      <textarea id="promptPreviewBox" rows="15" readonly></textarea>
+      <textarea id="promptPreviewBox" rows="16" readonly></textarea>
     </div>
   </div>
 
