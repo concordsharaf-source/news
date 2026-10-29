@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="assets/style.css?v=12" />
+  <link rel="stylesheet" href="assets/style.css?v=13" />
 </head>
 <body>
   <header class="topbar">
@@ -268,22 +268,22 @@
 
             <div class="row-3" style="margin-bottom:10px;">
               <div>
-                <label>أقصى كلمات لفقرة الشريط:</label>
-                <input type="number" id="tickerMaxWords" value="16" min="6" max="35" oninput="runTickerRadar()" />
+                <label>أقصى كلمات لفقرة الشريط (المثالي 10–25):</label>
+                <input type="number" id="tickerMaxWords" value="25" min="10" max="35" oninput="runTickerRadar()" />
               </div>
               <div>
-                <label>طريقة عرض الفقرات:</label>
-                <select id="tickerSeparator" onchange="refreshTickerPreviewBar()">
-                  <option value="newline">فقرات تحت بعض (كل فقرة بسطر)</option>
+                <label>تنسيق الفاصل الإجباري للبث:</label>
+                <select id="tickerSeparator" onchange="handleTickerSeparatorChange()">
+                  <option value="bitmap" selected>📺 صيغة البث (&lt;BITMAP&gt;E:\NEWS\Logo.png&lt;/BITMAP&gt;)</option>
+                  <option value="newline">فقرات صافية تحت بعض (بدون كود BITMAP)</option>
                   <option value="bullet">نقطة بداية لكل فقرة (• ...)</option>
-                  <option value="dash">شرطة بداية لكل فقرة (- ...)</option>
                   <option value="inline">شريط متصل بفاصل ( • )</option>
                 </select>
               </div>
               <div>
-                <label>نسبة المصادر في الفقرات:</label>
+                <label>تفكيك التصريحات والمتحدثين:</label>
                 <select id="tickerAttributionMode">
-                  <option value="repeat">تكرار المصدر بداية كل فقرة متفرعة</option>
+                  <option value="repeat">الفاعل أولاً + اختصار الصفة بالفقرات التالية (معتمد ✅)</option>
                   <option value="compact">عناوين خبرية مستقلة</option>
                 </select>
               </div>
@@ -560,6 +560,6 @@
   </div>
 
   <div id="toast" class="toast"></div>
-  <script src="assets/app.js?v=12"></script>
+  <script src="assets/app.js?v=13"></script>
 </body>
 </html>

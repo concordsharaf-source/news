@@ -138,8 +138,8 @@ async function init() {
     if (!Array.isArray(localList) || !localList.length) return JSON.parse(JSON.stringify(repoList));
     const localById = new Map(localList.map(r => [r.id, r]));
     const repoIds = new Set(repoList.map(r => r.id));
-    // Custom rules added locally by user that are not yet in repoList
-    const userOnlyRules = localList.filter(r => r.id && !repoIds.has(r.id));
+    // Custom rules added locally by user (always prefixed "rule-<timestamp>") that are not yet in repoList
+    const userOnlyRules = localList.filter(r => /^rule-\d+$/.test(r.id || "") && !repoIds.has(r.id));
     // Repo rules (with latest improved text, preserving user's active on/off toggle if set)
     const mergedRepo = repoList.map(r => {
       const loc = localById.get(r.id);
@@ -310,37 +310,48 @@ ${rawText}
 
 async function buildTickerPrompt(rawBulletin) {
   const activeRules = state.tickerRules.filter(r => r.active);
-  const maxWords = parseInt(document.getElementById("tickerMaxWords").value, 10) || 16;
-  const attrMode = document.getElementById("tickerAttributionMode").value;
+  const maxWords = parseInt(document.getElementById("tickerMaxWords").value, 10) || 25;
+  const sepMode = document.getElementById("tickerSeparator").value;
   const extraNote = document.getElementById("tickerExtraNote").value.trim();
   const chosenExamples = await getRelevantTickerExamples(3);
 
   const rulesBlock = activeRules.map((r, i) => `${i + 1}. ${r.text}`).join("\n");
-  const dictBlock = state.dictionary.slice(0, 30).map(d => `- يُمنع «${d.bad}» والصواب «${d.good}»`).join("\n");
+  // Filter out written-hundred dictionary items that don't apply to numeric ticker digits, keep political/orthography terms
+  const dictBlock = state.dictionary
+    .filter(d => !/مئة/.test(d.bad))
+    .slice(0, 35)
+    .map(d => `- يُمنع «${d.bad}» والصواب المعتمد «${d.good}»`)
+    .join("\n");
   const examplesBlock = chosenExamples.map((ex, idx) =>
     `<مثال_نشرة_${idx + 1}>\n[النشرة الخام قبل التفكيك]:\n${ex.raw}\n\n[الشريط الإخباري المعتمد المستخرج منها]:\n${ex.edited}\n</مثال_نشرة_${idx + 1}>`
   ).join("\n\n");
 
-  const attrInstruction = attrMode === "repeat"
-    ? "عند تفكيك تصريح لمصدر أو مسؤول إلى عدة فقرات، كرّر اسم المصدر باختصار في مطلع كل فقرة متفرعة حتى تكون كل فقرة مفهومة ومستقلة تماماً على الشاشة."
-    : "اذكر المصدر بوضوح وصُغ كل فقرة كجملة خبرية تامة مستقلة بذاتها دون ضمائر عائدة مجهولة.";
+  const separatorInstruction = sepMode === "bitmap"
+    ? `بعد كل فقرة شريط ضع سطراً فارغاً ثم الفاصل الإجباري التالي حرفياً في سطر مستقل ثم سطراً فارغاً:\n<BITMAP>E:\\NEWS\\Logo.png</BITMAP>`
+    : `ضع كل فقرة شريط في سطر مستقل وحدها دون ترقيم ودون نقطة في نهايتها.`;
 
   return `أنت محرر شريط إخباري تلفزيوني محترف ومدقق لغوي صارم.
-مهمتك: تحويل وتفكيك <النشرة_الإخبارية_الخام> بالكامل إلى فقرات شريط إخباري متتالية وفق <قواعد_الشريط_الإخباري> والمصطلحات الثابتة وأسلوب <أمثلة_النشرات_السابقة>.
+مهمتك: تحويل وتفكيك <النشرة_الإخبارية_الخام> كاملة إلى شريط إخباري شامل لجميع الأخبار الواردة فيها دون حذف أي خبر مهم ودون اختصارها إلى ملخص ودون إضافة أي معلومات غير موجودة في النص، في رد واحد مكتمل.
 
-<قواعد_الشريط_الإخباري>
+<قواعد_تحويل_النشرات_إلى_شريط_إخباري>
 ${rulesBlock}
-- الحد الأقصى لطول كل فقرة: ${maxWords} كلمة.
-- ${attrInstruction}
-</قواعد_الشريط_الإخباري>
+- الطول المثالي لكل فقرة: من 10 إلى ${maxWords} كلمة تقريباً تحمل معنى كاملاً واضحاً.
+- حجم الشريط للنشرة الكاملة: بين 800 و 1000 كلمة صافية تقريباً (أكبر عدد ممكن من الفقرات المتوسطة الواضحة دون حشو أو بتر).
+</قواعد_تحويل_النشرات_إلى_شريط_إخباري>
 
-<المصطلحات_الثابتة_والضبط_اللغوي>
+<ضوابط_حاسمة_للشريط_الإخباري>
+1. الفاعل أولاً دائماً: كل فقرة تبدأ بالفاعل ثم الفعل (✅ وزارة الصحة تعلن... / ✅ قوات الاحتلال الصهيوني تعتقل 20 فلسطينياً)، ويُمنع البدء بالفعل الماضي (❌ أعلنت وزارة الصحة / ❌ اعتقل الاحتلال).
+2. الصيغ الإخبارية للشهداء والجرحى: يُكتب (استشهاد رجلين / استشهاد 3 أطفال / إصابة امرأتين / إصابة 4 مدنيين) ولا يُكتب (رجلان استشهدا / امرأتان أصيبتا).
+3. الأرقام في الشريط تُكتب بالأرقام الرقمية دائماً (3، 15، 124، 3024) مع ترك مسافة قبل الرقم وبعده داخل الجملة (مثال: استشهاد 5 مدنيين وإصابة 3 آخرين)، ولا تُكتب بالحروف إلا إذا كانت جزءاً من تسمية رسمية.
+4. التصريحات الطويلة: أول فقرة ملخص التصريح، ثم (وزارة الخارجية تؤكد... / وزارة الخارجية تشير... / وزارة الخارجية: ...) دون إعادة الاسم الكامل أو الصفة الكاملة في كل فقرة.
+5. المتحدث العسكري اليمني: في أول فقرة فقط «المتحدث باسم القوات المسلحة العميد يحيى سريع يؤكد...»، وفي الفقرات التالية «العميد يحيى سريع يؤكد... / العميد يحيى سريع يعلن... / العميد يحيى سريع: ...».
+6. تجاهل واحذف تماماً جميع رموز وتعليمات الإخراج التلفزيوني: (lvo، Ss، Vt، Clip، Vb، مشاهد)، ولا تضع نقطة في نهاية الفقرة، ولا عناوين داخل الشريط، ولا أرقام فقرات، ولا عبارات «خبر عاجل» أو «متابعة».
+7. المصطلحات الثابتة الإلزامية: (العدو الصهيوني، الكيان الصهيوني، الاحتلال، قوات الاحتلال، جيش العدو، استشهاد، ارتقاء، مائة عند ورودها لفظاً رسمياً):
 ${dictBlock}
-- التزم تسمية «قوات العدو الصهيوني» في غزة و«قوات الاحتلال الصهيوني» في الضفة، وكتابة «مائة» بالألف الفارقة دائماً، وسلامة الهمزات والإملاء.
-</المصطلحات_الثابتة_والضبط_اللغوي>
+</ضوابط_حاسمة_للشريط_الإخباري>
 
 ${examplesBlock ? `<أمثلة_النشرات_السابقة>
-تنبيه: هذه الأمثلة لتعلّم طريقة التفكيك والصياغة فقط؛ لا تنقل منها أي خبر إلى نشرة اليوم!
+تنبيه: هذه الأمثلة لتعلّم طريقة التفكيك والصياغة والفاصل فقط؛ لا تنقل منها أي خبر إلى نشرة اليوم!
 ${examplesBlock}
 </أمثلة_النشرات_السابقة>` : ""}
 
@@ -350,7 +361,10 @@ ${extraNote ? `<توجيه_إضافي>\n${extraNote}\n</توجيه_إضافي>` 
 ${rawBulletin}
 </النشرة_الإخبارية_الخام>
 
-أخرج كل فقرة من فقرات الشريط في سطر مستقل وحدها دون ترقيم ودون مقدمات.`;
+<تنسيق_الإخراج_الإجباري>
+${separatorInstruction}
+أخرج الشريط النهائي كاملاً مباشرة دون أي مقدمات أو شروحات أو تعليقات.
+</تنسيق_الإخراج_الإجباري>`;
 }
 
 function buildProofreaderPrompt(rawText, draftText, mode) {
@@ -361,7 +375,7 @@ function buildProofreaderPrompt(rawText, draftText, mode) {
 
   const modeChecks = mode === "news"
     ? `- تحقق بصرامة: هل جميع الأرقام حُوّلت إلى حروف عربية؟ هل كُتبت «مائة» ومشتقاتها بالألف؟ هل حُذفت التواريخ والأيام والساعات والروابط واسم المصدر الأصلي وعبارات (اليوم، أمس، الليلة الماضية، الأسبوع الماضي) والأشهر السريانية والاتجاهات المركبة وأسماء الوكالات والمراسلين وأسماء معتقلي الضفة؟ هل وُضع الفاصل lvo في سطره المستقل (إن كان القالب القياسي)؟ هل استُخدم «صهيوني» بدل «إسرائيلي»، و«استشهاد» بدل «مقتل»، و«فلسطيني» بدل «مواطن»، وحُذف أي تكرار أو خلفية طويلة؟`
-    : `- تحقق أن كل سطر يمثل فقرة شريط مستقلة المعنى لا تبدأ بضمير عائم مجهول (وأضاف أن / وأشار إلى)، ملتزماً بالمصطلحات المعتمدة وسلامة الإملاء والهمزات.`;
+    : `- تحقق بصرامة من قواعد الشريط: هل تبدأ كل فقرة بالفاعل أولاً (وليس بالفعل الماضي أو بضمير عائم مثل وأضاف/وأشار)؟ هل صيغ الضحايا بصيغة «استشهاد 3 أطفال / إصابة امرأتين»؟ هل كُتبت جميع الأرقام بالرموز الرقمية (3، 15، 124) مع مسافة قبل الرقم وبعده؟ هل حُذفت رموز الإخراج (lvo، Ss، Vt، Clip، Vb، مشاهد) والنقطة من نهاية الفقرات وعبارتا «خبر عاجل / متابعة»؟ هل وُضع الفاصل <BITMAP>E:\\NEWS\\Logo.png</BITMAP> بعد كل فقرة مع سطر فارغ قبله وبعده؟`;
 
   return `أنت المدقق اللغوي والمراجع النهائي الصارم في غرفة الأخبار.
 راجع <المسودة> مقارنةً بـ <النص_الخام_الأصلي> ونفّذ بدقة تامة:
@@ -579,8 +593,60 @@ async function runTickerWorkflow() {
   }
 }
 
+const TICKER_BITMAP_TAG = "<BITMAP>E:\\NEWS\\Logo.png</BITMAP>";
+
+function toWesternDigitsAndSpaced(line) {
+  const arNums = "٠١٢٣٤٥٦٧٨٩";
+  let s = line.replace(/[٠-٩]/g, d => String(arNums.indexOf(d)));
+  // Ensure space before and after numbers inside sentence ("استشهاد 5 مدنيين")
+  s = s.replace(/([^\s\d("«\-])(\d+)/g, "$1 $2");
+  s = s.replace(/(\d+)([^\s\d)"».,%:\-])/g, "$1 $2");
+  return s.replace(/[ \t]{2,}/g, " ").trim();
+}
+
+function extractPureTickerParagraphs(txt) {
+  const tvCueExact = /^(lvo|ss|ss\s*-\s*lvo|vt|clip|vb|مشاهد|\[مشاهد\]|\(مشاهد\))$/i;
+  return String(txt || "")
+    .replace(/&lt;BITMAP&gt;.*?&lt;\/BITMAP&gt;/gi, "")
+    .replace(/<BITMAP>.*?<\/BITMAP>/gi, "")
+    .split(/\n+/)
+    .map(rawLine => {
+      let l = rawLine
+        .replace(/^[\s\-*•]+/, "")
+        .replace(/^\d+\s*[\-.)]+\s*/, "")
+        .replace(/^(خبر عاجل|عاجل|متابعة)\s*[:\-–—]?\s*/i, "")
+        .replace(/\b(Ss\s*-\s*lvo|lvo|Vt|Clip|Vb)\b/gi, "")
+        .replace(/\.+\s*$/, "")
+        .trim();
+      if (!l || tvCueExact.test(l)) return "";
+      return toWesternDigitsAndSpaced(l);
+    })
+    .filter(Boolean);
+}
+
+function formatPureTickerItems(items, sepOverride) {
+  if (!items.length) return "";
+  const mode = sepOverride || document.getElementById("tickerSeparator")?.value || "bitmap";
+  if (mode === "bitmap") {
+    return items.map(p => `${p}\n\n${TICKER_BITMAP_TAG}`).join("\n\n");
+  }
+  if (mode === "bullet") return items.map(l => `• ${l}`).join("\n");
+  if (mode === "dash") return items.map(l => `- ${l}`).join("\n");
+  if (mode === "inline") return items.join("  •  ");
+  return items.join("\n");
+}
+
 function normalizeTickerLines(txt) {
-  return txt.split(/\n+/).map(l => l.replace(/^[\s\-*•\d.)(]+/, "").replace(/\.+\s*$/, "").trim()).filter(Boolean).join("\n");
+  return formatPureTickerItems(extractPureTickerParagraphs(txt));
+}
+
+function handleTickerSeparatorChange() {
+  const el = document.getElementById("tickerOutput");
+  const items = extractPureTickerParagraphs(el.value);
+  if (items.length) {
+    el.value = formatPureTickerItems(items);
+  }
+  runTickerRadar();
 }
 
 async function runSecondPassProofreadOnly(mode) {
@@ -906,16 +972,19 @@ function runQualityRadar() {
 }
 
 function getCleanTickerItems() {
-  return document.getElementById("tickerOutput").value.split(/\n+/).map(l => l.replace(/^[\s\-*•]+/, "").trim()).filter(Boolean);
+  return extractPureTickerParagraphs(document.getElementById("tickerOutput").value);
 }
 
 function runTickerRadar() {
-  const editedAll = document.getElementById("tickerOutput").value;
+  const rawBoxText = document.getElementById("tickerOutput").value;
   const items = getCleanTickerItems();
-  const maxWords = parseInt(document.getElementById("tickerMaxWords").value, 10) || 16;
+  const maxWords = parseInt(document.getElementById("tickerMaxWords").value, 10) || 25;
+  const sepMode = document.getElementById("tickerSeparator")?.value || "bitmap";
 
-  const totalWords = editedAll.trim() ? editedAll.trim().split(/\s+/).length : 0;
-  document.getElementById("tickerStats").textContent = `${items.length} فقرة شريط | ${totalWords} كلمة إجمالاً`;
+  const pureJoined = items.join("\n");
+  const totalWords = items.reduce((sum, line) => sum + line.split(/\s+/).filter(Boolean).length, 0);
+  document.getElementById("tickerStats").textContent =
+    `${items.length} فقرة شريط | ${totalWords} كلمة صافية (المستهدف لنشرة كاملة: 800–1000 كلمة)`;
   refreshTickerPreviewBar();
 
   const alertsBox = document.getElementById("tickerAlertsChips");
@@ -924,32 +993,71 @@ function runTickerRadar() {
 
   if (!items.length) {
     badge.className = "chip chip-ok"; badge.textContent = "بانتظار الشريط";
-    alertsBox.innerHTML = `<span class="muted-note">يفحص الطول والضمائر المبتورة والمصطلحات الثابتة والإملاء تلقائياً.</span>`;
+    alertsBox.innerHTML = `<span class="muted-note">يفحص تلقائياً: الطول (10–25 كلمة)، الفاعل أولاً، الأرقام بالرموز، الفاصل &lt;BITMAP&gt;، والمصطلحات الثابتة.</span>`;
     linesBox.innerHTML = "";
     return;
   }
 
-  let issues = scanPolicyViolations(editedAll);
+  let issues = [];
+  // 1. Dictionary & fixed political/orthographic checks on pure items (excluding News-only temporal prohibitions)
+  state.dictionary.forEach(item => {
+    if (item.bad && !/مئة/.test(item.bad) && pureJoined.includes(item.bad)) {
+      issues.push({ type: "err", msg: `ممنوع «${item.bad}» ⬅ المعتمد: «${item.good}»` });
+    }
+  });
+  const isPal = /(غزة|الضفة|القدس|فلسطين|جنين|نابلس|طولكرم|الخليل|رام الله|رفح|خان يونس|جباليا|النصيرات)/.test(pureJoined);
+  if (isPal && /(^|\s)(مقتل|قُتل|قتلوا|قتلى)(?=[\s،.:؛]|$)/.test(pureJoined)) {
+    issues.push({ type: "err", msg: `استخدم «استشهاد / ارتقاء / شهداء» بدلاً من «مقتل / قتلى»!` });
+  }
+
+  // 2. Check written number words in Ticker (Rule 8: numbers must be digits in Ticker!)
+  const writtenNums = pureJoined.match(/(^|\s)(ثلاثة|أربعة|خمسة|ستة|سبعة|ثمانية|تسعة|عشرة|أحد عشر|اثنا عشر|اثني عشر|عشرون|عشرين|ثلاثون|ثلاثين|أربعون|أربعين|خمسون|خمسين)(?=[\s،]|$)/g);
+  if (writtenNums) {
+    issues.push({ type: "warn", msg: `🔢 في الشريط تُكتب الأرقام بالرموز دائماً (${writtenNums.slice(0, 3).map(s => s.trim()).join("، ")} ⬅ 3، 5، 20)` });
+  }
+
+  // 3. Check inverted casualty phrasing (Rule 9: رجلان استشهدا -> استشهاد رجلين)
+  if (/(رجلان|طفلان|امرأتان|مدنيان|فلسطينيان|شابان)\s+(استشهدا|أصيبا|ارتقيا)/.test(pureJoined)) {
+    issues.push({ type: "err", msg: `صيغة الحصيلة بالشريط: اكتب «استشهاد رجلين / إصابة امرأتين» وليس «رجلان استشهدا»` });
+  }
+
+  // 4. Check BITMAP separator presence when in bitmap mode (Rule 13)
+  if (sepMode === "bitmap" && !rawBoxText.includes(TICKER_BITMAP_TAG)) {
+    issues.push({ type: "warn", msg: `الفاصل الإجباري <BITMAP> غير مضاف بعد — اضغط «✨ تصحيح المصطلحات» لإضافته تلقائياً` });
+  }
+
+  // 5. Per-line checks: Dangling pronouns, Past-verb start ("الفاعل أولاً" Rule 5), too short (<7) or over maxWords
   const danglingRegex = /^(وأضاف|واضاف|وأضافت|وأشار|واشار|وأشارت|وأكد|واكد|وأكدت|وأوضح|واوضح|وأفاد|وافاد|وتابع|كما أكد|كما أشار)\b/;
+  const verbFirstRegex = /^(أعلن|أعلنت|اعتقل|اعتقلت|استهدف|استهدفت|شن|شنت|قصف|قصفت|دان|أدانت|أكد|أكدت|أفاد|أفادت|ارتفع|ارتفعت|سقط|أصيب|استشهد)\b/;
   let overLimitCount = 0;
+  let tooShortCount = 0;
+  let verbFirstCount = 0;
 
   linesBox.innerHTML = items.map((line, i) => {
     const wc = line.split(/\s+/).length;
     const isOver = wc > maxWords;
+    const isTooShort = wc < 7;
     const hasDangling = danglingRegex.test(line);
+    const hasVerbFirst = verbFirstRegex.test(line);
     if (isOver) overLimitCount++;
+    if (isTooShort) tooShortCount++;
+    if (hasVerbFirst) verbFirstCount++;
     if (hasDangling) issues.push({ type: "err", msg: `فقرة #${i + 1} تبدأ بضمير عائم (${line.split(" ")[0]}...) بلا ذكر المصدر!` });
+    const badCard = isOver || isTooShort || hasDangling || hasVerbFirst;
+    const chipLabel = isTooShort ? `${wc} كلمات (قصيرة جداً)` : (hasVerbFirst ? `${wc} كلمة (بدأت بفعل!)` : `${wc} / ${maxWords} كلمة`);
     return `
-      <div class="ticker-line-card ${isOver || hasDangling ? 'overlimit' : ''}">
+      <div class="ticker-line-card ${badCard ? 'overlimit' : ''}">
         <span style="flex:1;"><strong>#${i + 1}:</strong> ${escapeHtml(line)}</span>
-        <span class="chip ${isOver ? 'chip-err' : 'chip-ok'}">${wc} / ${maxWords} كلمة</span>
+        <span class="chip ${badCard ? 'chip-err' : 'chip-ok'}">${chipLabel}</span>
       </div>`;
   }).join("");
 
+  if (verbFirstCount > 0) issues.unshift({ type: "warn", msg: `👤 (${verbFirstCount}) فقرة بدأت بالفعل بدل الفاعل — القاعدة 5: الفاعل أولاً (وزارة الصحة تعلن... / استشهاد 3...)` });
   if (overLimitCount > 0) issues.unshift({ type: "warn", msg: `📏 (${overLimitCount}) فقرة تتجاوز ${maxWords} كلمة` });
+  if (tooShortCount > 0) issues.unshift({ type: "warn", msg: `✂️ (${tooShortCount}) فقرة قصيرة ومبتورة (أقل من 7 كلمات — المثالي 10 إلى 25 كلمة)` });
 
   if (!issues.length) {
-    alertsBox.innerHTML = `<span class="chip chip-ok">✔ جميع الفقرات (${items.length}) سليمة ومستقلة المعنى ومطابقة للمصطلحات!</span>`;
+    alertsBox.innerHTML = `<span class="chip chip-ok">✔ جميع الفقرات (${items.length}) سليمة، تبدأ بالفاعل، مرقمة بالرموز، ومفصولة بـ BITMAP!</span>`;
     badge.className = "chip chip-ok"; badge.textContent = "✅ جاهز للبث";
   } else {
     alertsBox.innerHTML = issues.map(it => `<span class="chip ${it.type === 'err' ? 'chip-err' : 'chip-warn'}">${it.msg}</span>`).join("");
@@ -957,18 +1065,15 @@ function runTickerRadar() {
   }
 }
 
-function autoFixArabicErrors(targetId, silent = false) {
-  const el = document.getElementById(targetId);
-  let txt = el.value;
-  if (!txt.trim()) { if (!silent) showToast("⚠️ المربع فارغ!"); return; }
-
-  // Apply all dictionary & fixed-term replacements (longer phrases first!)
+function fixSingleArabicSegment(seg, isTicker = false) {
+  let txt = seg;
   const sortedDict = [...state.dictionary].sort((a, b) => (b.bad || "").length - (a.bad || "").length);
   sortedDict.forEach(({ bad, good }) => {
-    if (bad) txt = txt.split(bad).join(good);
+    if (!bad) return;
+    if (isTicker && /مئة/.test(bad) && !txt.includes(bad)) return;
+    txt = txt.split(bad).join(good);
   });
 
-  // Strip raw URLs/links ("احذف الروابط") & fix standalone "دهم" -> "مداهمة" safely without affecting words like "عددهم"
   txt = txt.replace(/https?:\/\/\S+|www\.\S+|t\.me\/\S+/gi, "");
   txt = txt.replace(/(^|[\s«"(])دهم(?=[\s،.:؛»")!]|$)/gm, "$1مداهمة");
 
@@ -986,10 +1091,27 @@ function autoFixArabicErrors(targetId, silent = false) {
   txt = txt.replace(/[ \t]+([،.؛:!؟])/g, "$1");
   txt = txt.replace(/([،؛:])([^\s\n\d»"])/g, "$1 $2");
   txt = txt.replace(/[ \t]{2,}/g, " ");
+  return txt;
+}
 
-  if (targetId === "tickerOutput") txt = normalizeTickerLines(txt);
-  el.value = txt;
-  targetId === "tickerOutput" ? runTickerRadar() : runQualityRadar();
+function autoFixArabicErrors(targetId, silent = false) {
+  const el = document.getElementById(targetId);
+  let txt = el.value;
+  if (!txt.trim()) { if (!silent) showToast("⚠️ المربع فارغ!"); return; }
+
+  if (targetId === "tickerOutput") {
+    // Fix each pure paragraph safely WITHOUT corrupting E:\NEWS\Logo.png, then re-add BITMAP tags!
+    const pureItems = extractPureTickerParagraphs(txt)
+      .map(item => toWesternDigitsAndSpaced(fixSingleArabicSegment(item, true).replace(/\.+\s*$/, "").trim()))
+      .filter(Boolean);
+    el.value = formatPureTickerItems(pureItems);
+    runTickerRadar();
+    if (!silent) showToast("✨ تم ضبط المصطلحات والمسافات حول الأرقام وحذف رموز الإخراج وإدراج فاصل BITMAP!");
+    return;
+  }
+
+  el.value = fixSingleArabicSegment(txt, false);
+  runQualityRadar();
   if (!silent) showToast("✨ تم تصحيح المصطلحات الثابتة والمائة والأشهر والهمزات فوراً!");
 }
 
@@ -1321,11 +1443,7 @@ async function previewPromptModal(mode) {
 
 function formatTickerForExport() {
   const items = getCleanTickerItems();
-  const mode = document.getElementById("tickerSeparator").value;
-  if (mode === "bullet") return items.map(l => `• ${l}`).join("\n");
-  if (mode === "dash") return items.map(l => `- ${l}`).join("\n");
-  if (mode === "inline") return items.join("  •  ");
-  return items.join("\n");
+  return formatPureTickerItems(items);
 }
 function refreshTickerPreviewBar() {
   const items = getCleanTickerItems();
@@ -1334,7 +1452,7 @@ function refreshTickerPreviewBar() {
 async function copyFormattedTicker() {
   const out = formatTickerForExport();
   if (!out) { showToast("⚠️ الشريط فارغ"); return; }
-  await copyTextSafe(out); showToast("✅ تم نسخ الشريط!");
+  await copyTextSafe(out); showToast("✅ تم نسخ الشريط جاهزاً للبث مع الفاصل!");
 }
 function downloadTickerTxt() {
   const out = formatTickerForExport();
@@ -1356,7 +1474,7 @@ function loadSampleRawNews() {
   showToast("🧪 أُدرج خبر خام تجريبي لاختبار تحويل الأرقام للحروف وفاصل lvo والمصطلحات الثابتة!");
 }
 function loadSampleBulletin() {
-  document.getElementById("rawBulletinInput").value = `الخبر الأول: استشهد أربعة فلسطينيين وأصيب آخرون نتيجة قصف طائرات العدو الصهيوني منزلاً في مخيم النصيرات وسط قطاع غزة خلال الساعات الماضية، وأفادت مصادر طبية أن من بين الشهداء طفلين وامرأة.\n\nالخبر الثاني: شنت قوات الاحتلال الصهيوني حملة مداهمات واسعة في مدينة الخليل بالضفة الغربية أسفرت عن اعتقال اثني عشر فلسطينياً واقتحام عدد من المنازل.`;
+  document.getElementById("rawBulletinInput").value = `قطاع غزة\nشهداء وجرحى بغارات للعدو الصهيوني على النصيرات\nاستشهد أربعة فلسطينيين وأصيب اثنا عشر آخرون نتيجة قصف طائرات العدو الصهيوني منزلاً في مخيم النصيرات وسط قطاع غزة.\nlvo\nوأفادت مصادر طبية أن من بين الشهداء طفلين وامرأتين.\n\nبيان القوات المسلحة اليمنية\nأكد المتحدث باسم القوات المسلحة العميد يحيى سريع تنفيذ عملية عسكرية استهدفت هدفاً حيوياً للعدو الصهيوني في يافا المحتلة.\nSs\nوأوضح العميد يحيى سريع أن العملية نُفذت بصاروخ باليستي فرط صوتي وحققت هدفها بنجاح.\n\nالضفة الغربية\nاعتقالات في الخليل\nاعتقلت قوات الاحتلال الصهيوني عشرين فلسطينياً خلال حملة مداهمة في محافظة الخليل.\nVt`;
   updateBulletinStats(); runTickerRadar();
 }
 function updateRawStats() {
@@ -1455,14 +1573,14 @@ function setupPwaFeatures() {
   // Purge any old v1-v4 PWA caches automatically so updates apply immediately!
   if ("caches" in window) {
     caches.keys().then(keys => {
-      keys.filter(k => k !== "mihbarah-pwa-v12").forEach(k => caches.delete(k));
+      keys.filter(k => k !== "mihbarah-pwa-v13").forEach(k => caches.delete(k));
     }).catch(() => {});
   }
 
   // 1. Register Service Worker
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js?v=12").then(reg => {
+      navigator.serviceWorker.register("sw.js?v=13").then(reg => {
         reg.update().catch(() => {});
       }).catch(() => {});
     });

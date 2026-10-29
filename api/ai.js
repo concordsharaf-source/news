@@ -19,9 +19,10 @@ async function callKeylessRoute(route, prompt) {
       body: JSON.stringify({
         model: "nvidia/nemotron-3-ultra-550b-a55b:free",
         messages: [{ role: "user", content: prompt }],
-        temperature: 0.1
+        temperature: 0.1,
+        max_tokens: 8192
       }),
-      signal: AbortSignal.timeout(34000)
+      signal: AbortSignal.timeout(46000)
     });
     const d = await r.json();
     if (!r.ok) throw new Error(d?.error?.message || `Kilo HTTP ${r.status}`);
@@ -41,9 +42,10 @@ async function callKeylessRoute(route, prompt) {
         model: "gpt-oss-120b",
         messages: [{ role: "user", content: prompt }],
         temperature: 0.1,
+        max_tokens: 8192,
         reasoning_effort: "low"
       }),
-      signal: AbortSignal.timeout(24000)
+      signal: AbortSignal.timeout(38000)
     });
     const d = await r.json();
     if (!r.ok) throw new Error(d?.error?.message || `OVH HTTP ${r.status}`);
@@ -62,9 +64,10 @@ async function callKeylessRoute(route, prompt) {
     body: JSON.stringify({
       model: "Meta-Llama-3_3-70B-Instruct",
       messages: [{ role: "user", content: prompt }],
-      temperature: 0.1
+      temperature: 0.1,
+      max_tokens: 8192
     }),
-    signal: AbortSignal.timeout(22000)
+    signal: AbortSignal.timeout(32000)
   });
   const d = await r.json();
   if (!r.ok) throw new Error(d?.error?.message || `OVH Llama HTTP ${r.status}`);
