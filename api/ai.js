@@ -1,7 +1,7 @@
 // Vercel Serverless AI Proxy (Runs on US servers — works in Yemen without VPN!)
 // Supports:
 // 1. instant_free (100% keyless, zero signup, zero credit card — Nemotron 550B + OpenAI GPT-OSS 120B + Llama 3.3 70B with automatic failover!)
-// 2. Optional user keys: groq, cohere, openrouter, gemini
+// 2. Optional user keys: groq, openrouter, gemini
 
 export const config = {
   maxDuration: 60
@@ -112,7 +112,6 @@ export default async function handler(req, res) {
     const envKeys = {
       gemini: process.env.GEMINI_API_KEY || "",
       groq: process.env.GROQ_API_KEY || "",
-      cohere: process.env.COHERE_API_KEY || "",
       openrouter: process.env.OPENROUTER_API_KEY || ""
     };
     const effectiveKey = (apiKey || envKeys[engine] || "").trim();
@@ -169,32 +168,7 @@ export default async function handler(req, res) {
     }
 
     // =====================================================================
-    // 3. Cohere v2 Chat API (Free Trial — 1,000 calls/month, no credit card)
-    // =====================================================================
-    if (engine === "cohere") {
-      const r = await fetch("https://api.cohere.com/v2/chat", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${effectiveKey}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model,
-          messages: [{ role: "user", content: prompt }],
-          temperature: 0.1
-        })
-      });
-      const d = await r.json();
-      if (!r.ok) {
-        return res.status(r.status).json({ error: d?.message || "خطأ من خادم Cohere" });
-      }
-      const blocks = d?.message?.content || [];
-      const text = Array.isArray(blocks) ? blocks.map(b => b.text || "").join("").trim() : "";
-      return res.status(200).json({ text });
-    }
-
-    // =====================================================================
-    // 4. OpenAI-Compatible APIs: Groq & OpenRouter
+    // 3. OpenAI-Compatible APIs: Groq & OpenRouter
     // =====================================================================
     const endpoints = {
       groq: "https://api.groq.com/openai/v1/chat/completions",

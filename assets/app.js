@@ -39,13 +39,6 @@ const ENGINES = {
       { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B Versatile" }
     ]
   },
-  cohere: {
-    label: "🔷 Cohere المجاني (Command-A — 1,000 طلب/شهر بدون بطاقة ✅)",
-    models: [
-      { id: "command-a-03-2025", name: "Command A (ممتاز في الفصحى الصحفية)" },
-      { id: "command-r-plus-08-2024", name: "Command R+" }
-    ]
-  },
   openrouter: {
     label: "🔀 OpenRouter المجاني (بمفتاح مجاني بدون بطاقة ✅)",
     models: [
@@ -90,7 +83,7 @@ let state = {
   dictionary: [],
   localNewsExamples: SafeStorage.get("nr_local_news_ex", []),
   localTickerExamples: SafeStorage.get("nr_local_ticker_ex", []),
-  keys: SafeStorage.get("nr_keys_v1", { groq: "", cohere: "", openrouter: "", gemini: "", github: "" }),
+  keys: SafeStorage.get("nr_keys_v1", { groq: "", openrouter: "", gemini: "", github: "" }),
   selectedFormat: "lvo_standard",
   ruleSubTab: "news",
   exSubTab: "news",
@@ -121,7 +114,6 @@ async function init() {
     document.documentElement.setAttribute("data-theme", "dark");
     document.getElementById("themeBtn").textContent = "☀️ نهاري";
   }
-  if (document.getElementById("cohereKeyInput")) document.getElementById("cohereKeyInput").value = state.keys.cohere || "";
   document.getElementById("geminiKeyInput").value = state.keys.gemini || "";
   document.getElementById("groqKeyInput").value = state.keys.groq || "";
   document.getElementById("openrouterKeyInput").value = state.keys.openrouter || "";
@@ -164,7 +156,6 @@ function populateEngineSelectors() {
     sSel.innerHTML += `<option value="${k}">${v.label}</option>`;
   }
   if (state.keys.groq) pSel.value = "groq";
-  else if (state.keys.cohere) pSel.value = "cohere";
   else if (state.keys.openrouter) pSel.value = "openrouter";
   else pSel.value = "instant_free";
 
@@ -186,8 +177,7 @@ function saveQuickGeminiKey() {
   if (!val) { showToast("⚠️ الصق المفتاح أولاً"); return; }
   if (val.startsWith("gsk_")) document.getElementById("groqKeyInput").value = val;
   else if (val.startsWith("sk-or-")) document.getElementById("openrouterKeyInput").value = val;
-  else if (val.startsWith("AIza")) document.getElementById("geminiKeyInput").value = val;
-  else if (document.getElementById("cohereKeyInput")) document.getElementById("cohereKeyInput").value = val;
+  else document.getElementById("geminiKeyInput").value = val;
   saveApiKeys();
   showToast("✅ تم حفظ المفتاح بنجاح!");
 }
@@ -453,21 +443,8 @@ async function callModel(engine, model, promptText) {
     return parts.filter(p => !p.thought).map(p => p.text || "").join("").trim();
   }
 
-  if (engine === "cohere") {
-    const r = await fetch("https://api.cohere.com/v2/chat", {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model, messages: [{ role: "user", content: promptText }], temperature: 0.1 })
-    });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d?.message || "تعذر الاتصال بـ Cohere");
-    const blocks = d?.message?.content || [];
-    return (Array.isArray(blocks) ? blocks.map(b => b.text || "").join("") : "").trim();
-  }
-
   const endpointMap = {
     groq: "https://api.groq.com/openai/v1/chat/completions",
-    mistral: "https://api.mistral.ai/v1/chat/completions",
     openrouter: "https://openrouter.ai/api/v1/chat/completions"
   };
   const endpoint = endpointMap[engine] || endpointMap.openrouter;
@@ -595,6 +572,157 @@ async function runSecondPassProofreadOnly(mode) {
     setStatus(barId, txtId, "ok", "✅ تمت المراجعة اللغوية والمصطلحية!");
   } catch (err) {
     setStatus(barId, txtId, "err", `⚠️ ${err.message}`);
+  }
+}
+
+// =========================================================================
+// Post-Edit Revision Note + 1-Click Save as Permanent Rule
+// =========================================================================
+function buildRevisionPrompt(rawText, currentDraft, revisionNote, mode) {
+  const isTicker = mode === "ticker";
+  const activeRules = (isTicker ? state.tickerRules : state.newsRules)
+    .filter(r => r.active)
+    .map((r, i) => `${i + 1}. ${r.text}`)
+    .join("\n");
+  const dictRules = state.dictionary
+    .map(d => `- يُمنع «${d.bad}» ⬅ المعتمد «${d.good}»`)
+    .join("\n");
+
+  const structureHint = isTicker
+    ? "حافظ على صيغة فقرات الشريط الإخباري (كل فقرة مستقلة المعنى في سطر منفصل بدون ترقيم أو نقاط في نهاية السطر)."
+    : (FORMAT_INSTRUCTIONS[state.selectedFormat] || FORMAT_INSTRUCTIONS.lvo_standard);
+
+  return `أنت كبير محرري غرفة أخبار تلفزيونية عربية. لديك ${isTicker ? "شريط إخباري محرر" : "خبر محرر"} جاهز، وطلب رئيس التحرير تعديلاً محدداً عليه.
+
+🔴 التعديل المطلوب تنفيذه فوراً وبحرفية تامة:
+«${revisionNote}»
+
+ضوابط التنفيذ الإلزامية:
+1. نفّذ التعديل المطلوب أعلاه بدقة كاملة على النص المحرر الحالي.
+2. حافظ تماماً على الهيكل والقالب المعتمد:
+${structureHint}
+3. التزم بكتابة جميع الأرقام بالحروف («مائة» ومشتقاتها بالألف دائماً) وبكافة القواعد المعتمدة:
+${activeRules}
+
+قاموس المصطلحات الثابتة الإلزامية:
+${dictRules}
+
+${rawText ? `النص الخام الأصلي (للرجوع للمعلومات عند الحاجة فقط):\n"""\n${rawText}\n"""\n` : ""}النص المحرر الحالي المطلوب تعديله:
+"""
+${currentDraft}
+"""
+
+أخرج النص النهائي المعدّل فقط جاهزاً للبث المباشر دون أي مقدمات أو شروحات أو علامات اقتباس.`;
+}
+
+async function addNoteToRuleStore(noteText, category, mode) {
+  const cleanNote = noteText.trim();
+  if (!cleanNote) return false;
+  const targetList = mode === "ticker" ? state.tickerRules : state.newsRules;
+  const alreadyExists = targetList.some(r => (r.text || "").trim() === cleanNote);
+  if (!alreadyExists) {
+    targetList.unshift({
+      id: "rule-" + Date.now(),
+      category: category || "مصطلحات وصياغة",
+      active: true,
+      text: cleanNote
+    });
+    persistRules();
+  }
+  const token = (state.keys.github || "").trim();
+  if (token) {
+    try {
+      const filePath = mode === "ticker" ? "data/ticker-rules.json" : "data/news-rules.json";
+      await githubPutFile(token, filePath, targetList, `إضافة قاعدة جديدة من نافذة التحرير: ${cleanNote.slice(0, 50)}`);
+      return "synced";
+    } catch (e) {
+      return "local";
+    }
+  }
+  return alreadyExists ? "exists" : "local";
+}
+
+async function saveRevisionNoteAsRuleOnly(mode) {
+  const isTicker = mode === "ticker";
+  const noteInput = document.getElementById(isTicker ? "tickerRevisionNote" : "newsRevisionNote");
+  const catInput = document.getElementById(isTicker ? "tickerRevisionCategory" : "newsRevisionCategory");
+  const note = (noteInput?.value || "").trim();
+  if (!note) {
+    showToast("⚠️ اكتب الملاحظة أو القاعدة في الخانة أولاً!");
+    return;
+  }
+  const res = await addNoteToRuleStore(note, catInput?.value || "مصطلحات وصياغة", mode);
+  noteInput.value = "";
+  if (res === "synced") {
+    showToast("✅ أُضيفت القاعدة وحُفظت تلقائياً في مستودع GitHub أيضاً!");
+  } else if (res === "exists") {
+    showToast("ℹ️ هذه القاعدة موجودة مسبقاً ضمن قواعدك النشطة");
+  } else {
+    showToast("✅ أُضيفت كقاعدة دائمة! ستُطبّق تلقائياً في كل الأخبار القادمة (اضغط ☁️ لحفظها في GitHub)");
+  }
+}
+
+async function applyRevisionNote(mode, saveAsRule) {
+  const isTicker = mode === "ticker";
+  const outId = isTicker ? "tickerOutput" : "editedNewsOutput";
+  const rawId = isTicker ? "rawBulletinInput" : "rawNewsInput";
+  const noteId = isTicker ? "tickerRevisionNote" : "newsRevisionNote";
+  const catId = isTicker ? "tickerRevisionCategory" : "newsRevisionCategory";
+  const barId = isTicker ? "tickerStatusBar" : "statusBar";
+  const txtId = isTicker ? "tickerStatusText" : "statusText";
+  const btnA = document.getElementById(isTicker ? "applyTickerRevAndRuleBtn" : "applyNewsRevAndRuleBtn");
+  const btnB = document.getElementById(isTicker ? "applyTickerRevOnlyBtn" : "applyNewsRevOnlyBtn");
+
+  const currentDraft = document.getElementById(outId).value.trim();
+  const rawText = document.getElementById(rawId).value.trim();
+  const note = (document.getElementById(noteId)?.value || "").trim();
+  const category = document.getElementById(catId)?.value || "مصطلحات وصياغة";
+
+  if (!currentDraft) {
+    showToast(isTicker ? "⚠️ لا يوجد شريط محرر لتعديله بعد!" : "⚠️ حرّر الخبر أولاً أو الصقه في مربع الخبر المحرر لتعديله!");
+    return;
+  }
+  if (!note) {
+    showToast("⚠️ اكتب ملاحظة التعديل المطلوب أولاً!");
+    return;
+  }
+
+  const pEng = document.getElementById("primaryEngineSelect").value;
+  const pMod = document.getElementById("primaryModelSelect").value;
+
+  if (btnA) btnA.disabled = true;
+  if (btnB) btnB.disabled = true;
+
+  try {
+    let ruleStatus = null;
+    if (saveAsRule) {
+      ruleStatus = await addNoteToRuleStore(note, category, mode);
+    }
+
+    setStatus(barId, txtId, "info", "✏️ جاري تعديل النص وفق ملاحظتك بدقة مع الحفاظ على القالب والمصطلحات...");
+    const prompt = buildRevisionPrompt(rawText, currentDraft, note, mode);
+    let updated = cleanAiMetaText(await callModel(pEng, pMod, prompt));
+    if (isTicker) updated = normalizeTickerLines(updated);
+
+    document.getElementById(outId).value = updated;
+    autoFixArabicErrors(outId, true);
+    document.getElementById(noteId).value = "";
+
+    if (saveAsRule) {
+      const syncMsg = ruleStatus === "synced"
+        ? "✅ تم تعديل النص بنجاح + اعتماد الملاحظة كقاعدة دائمة وحفظها في GitHub!"
+        : "✅ تم تعديل النص بنجاح + اعتماد الملاحظة كقاعدة دائمة لكل الأخبار القادمة!";
+      setStatus(barId, txtId, "ok", syncMsg);
+      showToast(syncMsg);
+    } else {
+      setStatus(barId, txtId, "ok", "✅ تم تطبيق ملاحظة التعديل على النص بنجاح!");
+      showToast("✅ تم تعديل النص وفق ملاحظتك!");
+    }
+  } catch (err) {
+    setStatus(barId, txtId, "err", `⚠️ ${err.message}`);
+  } finally {
+    if (btnA) btnA.disabled = false;
+    if (btnB) btnB.disabled = false;
   }
 }
 
@@ -1209,7 +1337,6 @@ function adoptComparison(which) {
 function saveApiKeys() {
   state.keys = {
     groq: document.getElementById("groqKeyInput").value.trim(),
-    cohere: (document.getElementById("cohereKeyInput")?.value || "").trim(),
     openrouter: document.getElementById("openrouterKeyInput").value.trim(),
     gemini: document.getElementById("geminiKeyInput").value.trim(),
     github: document.getElementById("githubTokenInput").value.trim()
@@ -1276,14 +1403,14 @@ function setupPwaFeatures() {
   // Purge any old v1-v4 PWA caches automatically so updates apply immediately!
   if ("caches" in window) {
     caches.keys().then(keys => {
-      keys.filter(k => k !== "mihbarah-pwa-v9").forEach(k => caches.delete(k));
+      keys.filter(k => k !== "mihbarah-pwa-v10").forEach(k => caches.delete(k));
     }).catch(() => {});
   }
 
   // 1. Register Service Worker
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js?v=9").then(reg => {
+      navigator.serviceWorker.register("sw.js?v=10").then(reg => {
         reg.update().catch(() => {});
       }).catch(() => {});
     });

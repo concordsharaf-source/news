@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="assets/style.css?v=9" />
+  <link rel="stylesheet" href="assets/style.css?v=10" />
 </head>
 <body>
   <header class="topbar">
@@ -97,7 +97,7 @@
 
             <div class="radar-box" style="margin-bottom:12px;">
               <div id="missingKeyBanner" style="display:none; background:var(--warn-soft); color:var(--warn); border:1px solid var(--warn); border-radius:9px; padding:9px 11px; margin-bottom:10px; font-size:0.82rem;">
-                🔑 <strong>للتشغيل الأوتوماتيكي المباشر:</strong> الصق مفتاح Groq (يضم OpenAI GPT-120B) أو Mistral أو OpenRouter أو Gemini هنا، <strong>أو اضغط زر «🏆 نسخ + فتح Arena.ai» بالأسفل لاستخدام Claude و GPT مجاناً!</strong>
+                🔑 <strong>مفتاح اختياري إضافي:</strong> الصق مفتاح Groq أو OpenRouter أو Gemini هنا عند الحاجة:
                 <div style="display:flex; gap:6px; margin-top:6px;">
                   <input type="password" id="quickGeminiKeyInput" placeholder="gsk_... أو sk-or-... أو AIza..." style="padding:6px 10px; font-size:0.84rem;" />
                   <button class="btn btn-primary btn-sm" onclick="saveQuickGeminiKey()">حفظ المفتاح</button>
@@ -194,6 +194,31 @@
               <div style="display:flex; gap:6px; flex-wrap:wrap;">
                 <button class="btn btn-outline btn-sm" onclick="sendEditedNewsToTicker()">📺 أرسل للشريط الإخباري</button>
                 <button class="btn btn-warn btn-sm" onclick="saveCurrentNewsAsExample()">⭐ حفظ كمثال معتمد</button>
+              </div>
+            </div>
+
+            <!-- Post-Edit Revision Note + Save as Rule -->
+            <div class="radar-box" style="margin-top:11px; border: 1.5px solid var(--primary); background: var(--surface-alt, var(--bg));">
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:7px;">
+                <strong style="font-size:0.9rem; color:var(--primary);">✏️ ملاحظة لتعديل الخبر المحرر + اعتمادها كقاعدة دائمة</strong>
+                <select id="newsRevisionCategory" style="width:auto; padding:4px 8px; font-size:0.78rem;">
+                  <option value="مصطلحات وصياغة">تصنيف القاعدة: مصطلحات وصياغة</option>
+                  <option value="القالب والهيكل">تصنيف القاعدة: القالب والهيكل</option>
+                  <option value="الأرقام والزمن">تصنيف القاعدة: الأرقام والزمن</option>
+                  <option value="توجيه عام">تصنيف القاعدة: توجيه عام</option>
+                </select>
+              </div>
+              <textarea id="newsRevisionNote" rows="2" placeholder="اكتب التعديل المطلوب على الخبر أعلاه (مثال: استبدل كلمة قُتل باستشهد مع الفلسطينيين دائماً، أو اختصر الخاتمة لسطر واحد، أو ابدأ الكبشن بـ...)"></textarea>
+              <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">
+                <button class="btn btn-primary btn-sm" id="applyNewsRevAndRuleBtn" style="flex:1; min-width:210px;" onclick="applyRevisionNote('news', true)">
+                  🔄➕ عدّل الخبر الآن + أضفها كقاعدة دائمة
+                </button>
+                <button class="btn btn-outline btn-sm" id="applyNewsRevOnlyBtn" onclick="applyRevisionNote('news', false)">
+                  🔄 عدّل هذا الخبر فقط
+                </button>
+                <button class="btn btn-ok btn-sm" onclick="saveRevisionNoteAsRuleOnly('news')" title="يحفظ الملاحظة ضمن القواعد الدائمة دون إعادة صياغة الخبر الحالي">
+                  ➕ احفظها كقاعدة فقط
+                </button>
               </div>
             </div>
 
@@ -313,6 +338,29 @@
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-top:7px;">
               <span id="tickerStats" class="muted-note">0 فقرة شريط | 0 كلمة إجمالاً</span>
               <button class="btn btn-warn btn-sm" onclick="saveCurrentTickerAsExample()">⭐ حفظ (النشرة + الشريط) في أمثلتي</button>
+            </div>
+
+            <!-- Post-Edit Ticker Revision Note + Save as Ticker Rule -->
+            <div class="radar-box" style="margin-top:11px; border: 1.5px solid var(--ticker);">
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:7px;">
+                <strong style="font-size:0.9rem; color:var(--ticker);">✏️ ملاحظة لتعديل الشريط المستخرج + إضافتها كقاعدة شريط</strong>
+                <select id="tickerRevisionCategory" style="width:auto; padding:4px 8px; font-size:0.78rem;">
+                  <option value="صياغة الشريط">تصنيف القاعدة: صياغة الشريط</option>
+                  <option value="مصطلحات ثابتة">تصنيف القاعدة: مصطلحات ثابتة</option>
+                </select>
+              </div>
+              <textarea id="tickerRevisionNote" rows="2" placeholder="اكتب ملاحظتك لتعديل فقرات الشريط أعلاه واعتمادها كقاعدة شريط دائمة..."></textarea>
+              <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">
+                <button class="btn btn-ticker btn-sm" id="applyTickerRevAndRuleBtn" style="flex:1; min-width:210px;" onclick="applyRevisionNote('ticker', true)">
+                  🔄➕ عدّل الشريط + أضفها كقاعدة دائمة
+                </button>
+                <button class="btn btn-outline btn-sm" id="applyTickerRevOnlyBtn" onclick="applyRevisionNote('ticker', false)">
+                  🔄 عدّل هذا الشريط فقط
+                </button>
+                <button class="btn btn-ok btn-sm" onclick="saveRevisionNoteAsRuleOnly('ticker')">
+                  ➕ احفظها كقاعدة فقط
+                </button>
+              </div>
             </div>
 
             <div class="tv-ticker-wrap">
@@ -474,30 +522,21 @@
           </div>
 
           <div class="radar-box" style="margin-top:0;">
-            <h3 style="margin:0 0 6px; font-size:0.96rem;">2️⃣ مفتاح Cohere المجاني (اختياري — Command-A الفصيح، 1,000 طلب/شهر)</h3>
-            <p class="muted-note">
-              مجاني بالإيميل فقط بدون بطاقة من:
-              <a href="https://dashboard.cohere.com/api-keys" target="_blank" rel="noopener" style="color:var(--primary); font-weight:bold;">dashboard.cohere.com/api-keys</a>
-            </p>
-            <input type="password" id="cohereKeyInput" placeholder="مفتاح Cohere Trial..." oninput="saveApiKeys()" />
-          </div>
-
-          <div class="radar-box" style="margin-top:0;">
-            <h3 style="margin:0 0 6px; font-size:0.96rem;">3️⃣ مفتاح OpenRouter المجاني (اختياري — Nemotron 550B و Gemma 4)</h3>
+            <h3 style="margin:0 0 6px; font-size:0.96rem;">2️⃣ مفتاح OpenRouter المجاني (اختياري — Nemotron 550B و Gemma 4)</h3>
             <p class="muted-note">من: <a href="https://openrouter.ai/keys" target="_blank" rel="noopener" style="color:var(--primary); font-weight:bold;">openrouter.ai/keys</a></p>
             <input type="password" id="openrouterKeyInput" placeholder="sk-or-..." oninput="saveApiKeys()" />
           </div>
 
           <div class="radar-box" style="margin-top:0;">
-            <h3 style="margin:0 0 6px; font-size:0.96rem;">4️⃣ مفتاح Google Gemini المجاني (اختياري)</h3>
+            <h3 style="margin:0 0 6px; font-size:0.96rem;">3️⃣ مفتاح Google Gemini المجاني (اختياري)</h3>
             <p class="muted-note">من: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:var(--primary); font-weight:bold;">aistudio.google.com/apikey</a></p>
             <input type="password" id="geminiKeyInput" placeholder="AIza..." oninput="saveApiKeys()" />
           </div>
 
           <div class="radar-box" style="margin-top:0; border-color: var(--accent);">
-            <h3 style="margin:0 0 6px; font-size:0.96rem; color: var(--accent);">5️⃣ مزامنة القواعد والأمثلة الجديدة إلى GitHub (اختياري)</h3>
+            <h3 style="margin:0 0 6px; font-size:0.96rem; color: var(--accent);">4️⃣ مزامنة القواعد والأمثلة الجديدة إلى GitHub (اختياري)</h3>
             <p class="muted-note">
-              لحفظ أي قاعدة أو مثال جديد مباشرة في ملفات مستودعك <code>concordsharaf-source/news</code> عبر زر «☁️ حفظ في GitHub»:
+              لحفظ أي قاعدة أو مثال جديد مباشرة في ملفات مستودعك <code>concordsharaf-source/news</code> تلقائياً أو عبر زر «☁️ حفظ في GitHub»:
             </p>
             <input type="password" id="githubTokenInput" placeholder="ghp_..." oninput="saveApiKeys()" />
           </div>
@@ -517,6 +556,6 @@
   </div>
 
   <div id="toast" class="toast"></div>
-  <script src="assets/app.js?v=9"></script>
+  <script src="assets/app.js?v=10"></script>
 </body>
 </html>
