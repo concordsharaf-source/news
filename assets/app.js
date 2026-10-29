@@ -23,34 +23,35 @@ const SafeStorage = {
 };
 
 const ENGINES = {
-  groq: {
-    label: "⚡ Groq المجاني (يضم OpenAI GPT-120B و Qwen عبر جسر Vercel ✅)",
+  instant_free: {
+    label: "🟢 مجاني فوري 100% (يعمل مباشرة بدون أي مفتاح أو تسجيل أو اشتراك ✅)",
     models: [
-      { id: "openai/gpt-oss-120b", name: "OpenAI GPT-OSS 120B (نموذج OpenAI الضخم - مجاني وسريع جداً)" },
-      { id: "qwen/qwen3.8-27b", name: "Qwen 3.8 27B (قوي جداً في الصياغة العربية)" },
+      { id: "nemotron-550b", name: "NVIDIA Nemotron 3 Ultra 550B (صياغة صحفية احترافية — بدون مفتاح ✅)" },
+      { id: "gpt-oss-120b", name: "OpenAI GPT-OSS 120B (سريع جداً ~10 ثوانٍ — بدون مفتاح ✅)" },
+      { id: "llama-3.3-70b", name: "Llama 3.3 70B Instruct (بدون مفتاح ✅)" }
+    ]
+  },
+  groq: {
+    label: "⚡ Groq المجاني (بمفتاح مجاني بدون بطاقة — عبر جسر Vercel ✅)",
+    models: [
+      { id: "openai/gpt-oss-120b", name: "OpenAI GPT-OSS 120B (فائق السرعة)" },
+      { id: "qwen/qwen3.8-27b", name: "Qwen 3.8 27B" },
       { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B Versatile" }
     ]
   },
-  mistral: {
-    label: "🟠 Mistral المجاني (صياغة صحفية عربية رصينة بدون بطاقة ✅)",
-    models: [
-      { id: "mistral-large-latest", name: "Mistral Large (احترافي ودقيق جداً في العربية)" },
-      { id: "mistral-saba-latest", name: "Mistral Saba (مخصص للغة العربية والشرق الأوسط)" }
-    ]
-  },
   cohere: {
-    label: "🔷 Cohere المجاني (Command-A البارع بالفصحى الصحفية ✅)",
+    label: "🔷 Cohere المجاني (Command-A — 1,000 طلب/شهر بدون بطاقة ✅)",
     models: [
-      { id: "command-a-03-2025", name: "Command A (من أقوى النماذج عالمياً في التحرير العربي)" },
+      { id: "command-a-03-2025", name: "Command A (ممتاز في الفصحى الصحفية)" },
       { id: "command-r-plus-08-2024", name: "Command R+" }
     ]
   },
   openrouter: {
-    label: "🔀 OpenRouter المجاني (Nemotron 550B و Gemma 4 ✅)",
+    label: "🔀 OpenRouter المجاني (بمفتاح مجاني بدون بطاقة ✅)",
     models: [
-      { id: "nvidia/nemotron-3-ultra-550b-a55b:free", name: "Nemotron 3 Ultra 550B (ضخم ومجاني)" },
-      { id: "google/gemma-4-31b-it:free", name: "Gemma 4 31B (مجاني)" },
-      { id: "openrouter/free", name: "الموجّه التلقائي لأفضل نموذج مجاني متاح" }
+      { id: "nvidia/nemotron-3-ultra-550b-a55b:free", name: "Nemotron 3 Ultra 550B (:free)" },
+      { id: "google/gemma-4-31b-it:free", name: "Gemma 4 31B (:free)" },
+      { id: "openrouter/free", name: "الموجّه التلقائي المجاني" }
     ]
   },
   gemini: {
@@ -89,7 +90,7 @@ let state = {
   dictionary: [],
   localNewsExamples: SafeStorage.get("nr_local_news_ex", []),
   localTickerExamples: SafeStorage.get("nr_local_ticker_ex", []),
-  keys: SafeStorage.get("nr_keys_v1", { groq: "", mistral: "", cohere: "", openrouter: "", gemini: "", github: "" }),
+  keys: SafeStorage.get("nr_keys_v1", { groq: "", cohere: "", openrouter: "", gemini: "", github: "" }),
   selectedFormat: "lvo_standard",
   ruleSubTab: "news",
   exSubTab: "news",
@@ -120,7 +121,6 @@ async function init() {
     document.documentElement.setAttribute("data-theme", "dark");
     document.getElementById("themeBtn").textContent = "☀️ نهاري";
   }
-  if (document.getElementById("mistralKeyInput")) document.getElementById("mistralKeyInput").value = state.keys.mistral || "";
   if (document.getElementById("cohereKeyInput")) document.getElementById("cohereKeyInput").value = state.keys.cohere || "";
   document.getElementById("geminiKeyInput").value = state.keys.gemini || "";
   document.getElementById("groqKeyInput").value = state.keys.groq || "";
@@ -164,21 +164,21 @@ function populateEngineSelectors() {
     sSel.innerHTML += `<option value="${k}">${v.label}</option>`;
   }
   if (state.keys.groq) pSel.value = "groq";
-  else if (state.keys.mistral) pSel.value = "mistral";
   else if (state.keys.cohere) pSel.value = "cohere";
   else if (state.keys.openrouter) pSel.value = "openrouter";
-  else if (state.keys.gemini) pSel.value = "gemini";
-  else pSel.value = "groq";
+  else pSel.value = "instant_free";
 
-  sSel.value = state.keys.mistral ? "mistral" : (state.keys.gemini ? "gemini" : "openrouter");
+  sSel.value = "instant_free";
   updateModelDropdown("primary");
   updateModelDropdown("secondary");
+  // Set second model in comparison to gpt-oss-120b so comparing instant_free compares Nemotron-550B vs GPT-OSS-120B!
+  const sMod = document.getElementById("secondaryModelSelect");
+  if (sSel.value === "instant_free" && sMod && sMod.options.length > 1) {
+    sMod.selectedIndex = 1;
+  }
 
   const banner = document.getElementById("missingKeyBanner");
-  if (banner) {
-    const hasAnyKey = !!(state.keys.groq || state.keys.mistral || state.keys.cohere || state.keys.openrouter || state.keys.gemini);
-    banner.style.display = hasAnyKey ? "none" : "block";
-  }
+  if (banner) banner.style.display = "none";
 }
 
 function saveQuickGeminiKey() {
@@ -187,9 +187,9 @@ function saveQuickGeminiKey() {
   if (val.startsWith("gsk_")) document.getElementById("groqKeyInput").value = val;
   else if (val.startsWith("sk-or-")) document.getElementById("openrouterKeyInput").value = val;
   else if (val.startsWith("AIza")) document.getElementById("geminiKeyInput").value = val;
-  else if (document.getElementById("mistralKeyInput")) document.getElementById("mistralKeyInput").value = val;
+  else if (document.getElementById("cohereKeyInput")) document.getElementById("cohereKeyInput").value = val;
   saveApiKeys();
-  showToast("✅ تم حفظ المفتاح بنجاح! يمكنك التحرير الآن فوراً");
+  showToast("✅ تم حفظ المفتاح بنجاح!");
 }
 
 async function pasteAndAuditOutput(targetId) {
@@ -392,8 +392,36 @@ async function callModel(engine, model, promptText) {
     }
   }
 
+  // Local browser fallback when /api/ai is unavailable (e.g. offline static file)
+  if (engine === "instant_free") {
+    if (model === "nemotron-550b") {
+      const r = await fetch("https://api.kilo.ai/api/gateway/chat/completions", {
+        method: "POST",
+        headers: { "Authorization": "Bearer anonymous", "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "nvidia/nemotron-3-ultra-550b-a55b:free", messages: [{ role: "user", content: promptText }], temperature: 0.1 })
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d?.error?.message || "تعذر الاتصال بالمحرك الفوري");
+      return (d?.choices?.[0]?.message?.content || "").trim();
+    }
+    const ovhBody = {
+      model: model === "gpt-oss-120b" ? "gpt-oss-120b" : "Meta-Llama-3_3-70B-Instruct",
+      messages: [{ role: "user", content: promptText }],
+      temperature: 0.1
+    };
+    if (model === "gpt-oss-120b") ovhBody.reasoning_effort = "low";
+    const r = await fetch("https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(ovhBody)
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d?.error?.message || "تعذر الاتصال بالمحرك الفوري");
+    return (d?.choices?.[0]?.message?.content || "").trim();
+  }
+
   if (!apiKey) {
-    throw new Error(`يرجى لصق مفتاح ${engine.toUpperCase()} المجاني أولاً في تبويب «⚡ الربط والمزامنة»، أو اضغط زر «🏆 نسخ + فتح Arena.ai» لاستخدام Claude و GPT مجاناً.`);
+    throw new Error(`يرجى اختيار المحرك الأول «🟢 مجاني فوري 100% بدون مفتاح»، أو لصق مفتاح ${engine.toUpperCase()} في تبويب «⚡ الربط والمزامنة».`);
   }
 
   if (engine === "gemini") {
@@ -454,7 +482,11 @@ async function callModel(engine, model, promptText) {
 }
 
 function cleanAiMetaText(txt) {
-  return (txt || "").replace(/^```[\w]*\n?/gm, "").replace(/```$/gm, "").trim();
+  return (txt || "")
+    .replace(/^```[\w]*\n?/gm, "")
+    .replace(/```$/gm, "")
+    .replace(/\*\*/g, "")
+    .trim();
 }
 
 // =========================================================================
@@ -496,8 +528,8 @@ async function runEditorialWorkflow() {
         setStatus("statusBar", "statusText", "info", "🩺 المرحلة 2: المدقق اللغوي يراجع الأرقام بالحروف والمصطلحات والإملاء...");
         draft = cleanAiMetaText(await callModel(pEng, pMod, buildProofreaderPrompt(raw, draft, "news")));
         document.getElementById("editedNewsOutput").value = draft;
-        runQualityRadar();
       }
+      autoFixArabicErrors("editedNewsOutput", true);
       setStatus("statusBar", "statusText", "ok", "✅ تم التحرير والتدقيق وفق السياسة التحريرية بنجاح!");
     }
   } catch (err) {
@@ -528,8 +560,8 @@ async function runTickerWorkflow() {
       setStatus("tickerStatusBar", "tickerStatusText", "info", "🩺 المرحلة 2: التدقيق اللغوي وفحص استقلالية الفقرات والمصطلحات...");
       tickerDraft = normalizeTickerLines(cleanAiMetaText(await callModel(pEng, pMod, buildProofreaderPrompt(raw, tickerDraft, "ticker"))));
       document.getElementById("tickerOutput").value = tickerDraft;
-      runTickerRadar();
     }
+    autoFixArabicErrors("tickerOutput", true);
     setStatus("tickerStatusBar", "tickerStatusText", "ok", "✅ تم تفكيك النشرة وتدقيق الشريط بنجاح!");
   } catch (err) {
     setStatus("tickerStatusBar", "tickerStatusText", "err", `⚠️ ${err.message}`);
@@ -749,10 +781,10 @@ function runTickerRadar() {
   }
 }
 
-function autoFixArabicErrors(targetId) {
+function autoFixArabicErrors(targetId, silent = false) {
   const el = document.getElementById(targetId);
   let txt = el.value;
-  if (!txt.trim()) { showToast("⚠️ المربع فارغ!"); return; }
+  if (!txt.trim()) { if (!silent) showToast("⚠️ المربع فارغ!"); return; }
 
   // Apply all dictionary & fixed-term replacements (longer phrases first!)
   const sortedDict = [...state.dictionary].sort((a, b) => (b.bad || "").length - (a.bad || "").length);
@@ -778,7 +810,7 @@ function autoFixArabicErrors(targetId) {
   if (targetId === "tickerOutput") txt = normalizeTickerLines(txt);
   el.value = txt;
   targetId === "tickerOutput" ? runTickerRadar() : runQualityRadar();
-  showToast("✨ تم تصحيح المصطلحات الثابتة والمائة والأشهر والهمزات فوراً!");
+  if (!silent) showToast("✨ تم تصحيح المصطلحات الثابتة والمائة والأشهر والهمزات فوراً!");
 }
 
 // =========================================================================
@@ -1177,7 +1209,6 @@ function adoptComparison(which) {
 function saveApiKeys() {
   state.keys = {
     groq: document.getElementById("groqKeyInput").value.trim(),
-    mistral: (document.getElementById("mistralKeyInput")?.value || "").trim(),
     cohere: (document.getElementById("cohereKeyInput")?.value || "").trim(),
     openrouter: document.getElementById("openrouterKeyInput").value.trim(),
     gemini: document.getElementById("geminiKeyInput").value.trim(),
@@ -1245,14 +1276,14 @@ function setupPwaFeatures() {
   // Purge any old v1-v4 PWA caches automatically so updates apply immediately!
   if ("caches" in window) {
     caches.keys().then(keys => {
-      keys.filter(k => k !== "mihbarah-pwa-v8").forEach(k => caches.delete(k));
+      keys.filter(k => k !== "mihbarah-pwa-v9").forEach(k => caches.delete(k));
     }).catch(() => {});
   }
 
   // 1. Register Service Worker
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js?v=8").then(reg => {
+      navigator.serviceWorker.register("sw.js?v=9").then(reg => {
         reg.update().catch(() => {});
       }).catch(() => {});
     });

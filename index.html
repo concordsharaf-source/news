@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="assets/style.css?v=8" />
+  <link rel="stylesheet" href="assets/style.css?v=9" />
 </head>
 <body>
   <header class="topbar">
@@ -114,8 +114,8 @@
                 </div>
               </div>
               <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text); margin-top:4px;">
-                <input type="checkbox" id="twoStageToggle" checked style="width:16px; height:16px;" />
-                <span>🛡️ <strong>نظام المرحلتين الصارم:</strong> صياغة وفق القالب (lvo) ثم <strong>مراجعة لغوية وفحص الأرقام بالحروف والمصطلحات</strong></span>
+                <input type="checkbox" id="twoStageToggle" style="width:16px; height:16px;" />
+                <span>🛡️ <strong>مراجعة مزدوجة إضافية (اختياري):</strong> تشغيل تمريرة ذكاء اصطناعي ثانية بعد التحرير (التصحيح المصطلحي يعمل تلقائياً دائماً)</span>
               </label>
               <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text); margin-top:4px;">
                 <input type="checkbox" id="compareModeToggle" onchange="toggleCompareUI()" style="width:16px; height:16px;" />
@@ -268,8 +268,8 @@
             </div>
 
             <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text); margin-bottom:12px;">
-              <input type="checkbox" id="tickerTwoStage" checked style="width:16px; height:16px;" />
-              <span>🛡️ <strong>مراجعة لغوية وفحص استقلالية الفقرات والمصطلحات الثابتة (مرحلتان)</strong></span>
+              <input type="checkbox" id="tickerTwoStage" style="width:16px; height:16px;" />
+              <span>🛡️ <strong>مراجعة مزدوجة إضافية (اختياري):</strong> تمريرة ثانية بالذكاء الاصطناعي (التصحيح المصطلحي يعمل تلقائياً دائماً)</span>
             </label>
 
             <div style="display:flex; flex-wrap:wrap; gap:8px;">
@@ -456,48 +456,46 @@
           جميع المفاتيح تحفظ محلياً في متصفحك أنت فقط ولا تُرسل إلى الكود العام أبداً.
         </p>
 
+        <div class="radar-box" style="margin-bottom:14px; border: 2px solid var(--ok); background: var(--ok-soft);">
+          <h3 style="margin:0 0 6px; font-size:0.98rem; color: var(--ok);">🟢 لا تحتاج إلى أي مفتاح أو اشتراك للبدء!</h3>
+          <p class="muted-note" style="margin:0; color:var(--text);">
+            يعمل الموقع الآن افتراضياً بمحرك <strong>«🟢 مجاني فوري 100% بدون مفتاح»</strong> المدمج في خادم Vercel (يشغّل نموذج <strong>NVIDIA Nemotron 3 Ultra 550B</strong> ونموذج <strong>OpenAI GPT-OSS 120B</strong> مع تبديل تلقائي ذكي)، بالإضافة إلى زر <strong>«🏆 نسخ + فتح Arena.ai»</strong> لاستخدام <strong>Claude و GPT</strong> الأصليين مجاناً. المفاتيح أدناه اختيارية تماماً لمن يرغب بإضافة حسابه الشخصي.
+          </p>
+        </div>
+
         <div class="grid-2">
-          <div class="radar-box" style="margin-top:0; border: 2px solid var(--ok);">
-            <h3 style="margin:0 0 6px; font-size:0.96rem; color: var(--ok);">1️⃣ مفتاح Groq المجاني (يشغّل OpenAI GPT-120B و Qwen بسرعة خارقة ✅)</h3>
+          <div class="radar-box" style="margin-top:0;">
+            <h3 style="margin:0 0 6px; font-size:0.96rem;">1️⃣ مفتاح Groq المجاني (اختياري — بدون بطاقة بنكية ✅)</h3>
             <p class="muted-note">
-              مجاني تماماً بالإيميل وبدون بطاقة بنكية، ويعمل في اليمن عبر جسر Vercel المدمج في موقعك! يتيح تشغيل نموذج OpenAI المفتوح الضخم (<code>openai/gpt-oss-120b</code>) و<code>Qwen 3.8</code>:
-              <br/><a href="https://console.groq.com/keys" target="_blank" rel="noopener" style="color:var(--primary); font-weight:bold;">console.groq.com/keys</a>
+              مجاني بالإيميل فقط ويعمل في اليمن عبر جسر Vercel المدمج في موقعك:
+              <a href="https://console.groq.com/keys" target="_blank" rel="noopener" style="color:var(--primary); font-weight:bold;">console.groq.com/keys</a>
             </p>
             <input type="password" id="groqKeyInput" placeholder="gsk_..." oninput="saveApiKeys()" />
           </div>
 
           <div class="radar-box" style="margin-top:0;">
-            <h3 style="margin:0 0 6px; font-size:0.96rem;">2️⃣ مفتاح Mistral المجاني (يضم Mistral Large و Mistral Saba العربي بدون بطاقة ✅)</h3>
+            <h3 style="margin:0 0 6px; font-size:0.96rem;">2️⃣ مفتاح Cohere المجاني (اختياري — Command-A الفصيح، 1,000 طلب/شهر)</h3>
             <p class="muted-note">
-              صياغته الصحفية العربية ممتازة جداً ومجاني بدون بطاقة من:
-              <a href="https://console.mistral.ai/api-keys" target="_blank" rel="noopener" style="color:var(--primary); font-weight:bold;">console.mistral.ai/api-keys</a>
-            </p>
-            <input type="password" id="mistralKeyInput" placeholder="مفتاح Mistral المجاني..." oninput="saveApiKeys()" />
-          </div>
-
-          <div class="radar-box" style="margin-top:0;">
-            <h3 style="margin:0 0 6px; font-size:0.96rem;">3️⃣ مفتاح Cohere المجاني (نموذج Command-A البارع في التحرير العربي — 1,000 طلب/شهر)</h3>
-            <p class="muted-note">
-              سجّل بالإيميل فقط في:
+              مجاني بالإيميل فقط بدون بطاقة من:
               <a href="https://dashboard.cohere.com/api-keys" target="_blank" rel="noopener" style="color:var(--primary); font-weight:bold;">dashboard.cohere.com/api-keys</a>
             </p>
             <input type="password" id="cohereKeyInput" placeholder="مفتاح Cohere Trial..." oninput="saveApiKeys()" />
           </div>
 
           <div class="radar-box" style="margin-top:0;">
-            <h3 style="margin:0 0 6px; font-size:0.96rem;">4️⃣ مفتاح OpenRouter المجاني (Nemotron 550B و Gemma 4)</h3>
+            <h3 style="margin:0 0 6px; font-size:0.96rem;">3️⃣ مفتاح OpenRouter المجاني (اختياري — Nemotron 550B و Gemma 4)</h3>
             <p class="muted-note">من: <a href="https://openrouter.ai/keys" target="_blank" rel="noopener" style="color:var(--primary); font-weight:bold;">openrouter.ai/keys</a></p>
             <input type="password" id="openrouterKeyInput" placeholder="sk-or-..." oninput="saveApiKeys()" />
           </div>
 
           <div class="radar-box" style="margin-top:0;">
-            <h3 style="margin:0 0 6px; font-size:0.96rem;">5️⃣ مفتاح Google Gemini المجاني</h3>
+            <h3 style="margin:0 0 6px; font-size:0.96rem;">4️⃣ مفتاح Google Gemini المجاني (اختياري)</h3>
             <p class="muted-note">من: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:var(--primary); font-weight:bold;">aistudio.google.com/apikey</a></p>
             <input type="password" id="geminiKeyInput" placeholder="AIza..." oninput="saveApiKeys()" />
           </div>
 
           <div class="radar-box" style="margin-top:0; border-color: var(--accent);">
-            <h3 style="margin:0 0 6px; font-size:0.96rem; color: var(--accent);">6️⃣ مزامنة القواعد والأمثلة الجديدة إلى GitHub (اختياري)</h3>
+            <h3 style="margin:0 0 6px; font-size:0.96rem; color: var(--accent);">5️⃣ مزامنة القواعد والأمثلة الجديدة إلى GitHub (اختياري)</h3>
             <p class="muted-note">
               لحفظ أي قاعدة أو مثال جديد مباشرة في ملفات مستودعك <code>concordsharaf-source/news</code> عبر زر «☁️ حفظ في GitHub»:
             </p>
@@ -519,6 +517,6 @@
   </div>
 
   <div id="toast" class="toast"></div>
-  <script src="assets/app.js?v=8"></script>
+  <script src="assets/app.js?v=9"></script>
 </body>
 </html>
