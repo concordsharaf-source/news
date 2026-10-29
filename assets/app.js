@@ -559,6 +559,7 @@ async function runEditorialWorkflow() {
   btn.disabled = true;
   document.getElementById("editedNewsOutput").value = "";
   state.lastAiNewsDraft = "";
+  hideDiffBox("news");
   runQualityRadar();
   try {
     const prompt = await buildEditorialPrompt(raw);
@@ -610,6 +611,7 @@ async function runTickerWorkflow() {
   // Clear previous ticker immediately when starting a new one!
   document.getElementById("tickerOutput").value = "";
   state.lastAiTickerDraft = "";
+  hideDiffBox("ticker");
   runTickerRadar();
   try {
     setStatus("tickerStatusBar", "tickerStatusText", "info", "⏳ جاري تفكيك النشرة إلى نص شريط إخباري جاهز للنسخ...");
@@ -887,6 +889,124 @@ async function applyRevisionNote(mode, saveAsRule) {
   }
 }
 
+function hideDiffBox(mode) {
+  const el = document.getElementById(mode === "ticker" ? "tickerDiffLearnBox" : "newsDiffLearnBox");
+  if (el) { el.style.display = "none"; el.innerHTML = ""; }
+}
+
+function captureInitialPasteDraft(mode) {
+  const isTicker = mode === "ticker";
+  const outEl = document.getElementById(isTicker ? "tickerOutput" : "editedNewsOutput");
+  if (!outEl) return;
+  const wasEmpty = !outEl.value.trim();
+  const hadBaseline = isTicker ? !!state.lastAiTickerDraft : !!state.lastAiNewsDraft;
+  if (wasEmpty || !hadBaseline) {
+    setTimeout(() => {
+      const val = outEl.value.trim();
+      if (!val) return;
+      if (isTicker && !state.lastAiTickerDraft) state.lastAiTickerDraft = val;
+      if (!isTicker && !state.lastAiNewsDraft) state.lastAiNewsDraft = val;
+    }, 60);
+  }
+}
+
+function computeWordDiffHtml(beforeStr, afterStr) {
+  const a = String(beforeStr || "").trim().split(/\s+/).filter(Boolean);
+  const b = String(afterStr || "").trim().split(/\s+/).filter(Boolean);
+  if (!a.length) {
+    return { beforeHtml: `<span class="muted-note">(فقرة مضافة من المحرر)</span>`, afterHtml: `<span class="diff-add">${escapeHtml(afterStr)}</span>` };
+  }
+  const n = a.length, m = b.length;
+  const dp = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i][j] = a[i] === b[j] ? 1 + dp[i + 1][j + 1] : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+  const beforeParts = [];
+  const afterParts = [];
+  let i = 0, j = 0;
+  while (i < n || j < m) {
+    if (i < n && j < m && a[i] === b[j]) {
+      beforeParts.push(escapeHtml(a[i]));
+      afterParts.push(escapeHtml(b[j]));
+      i++; j++;
+    } else if (j < m && (i === n || dp[i][j + 1] >= dp[i + 1][j])) {
+      afterParts.push(`<span class="diff-add">${escapeHtml(b[j])}</span>`);
+      j++;
+    } else {
+      beforeParts.push(`<span class="diff-del">${escapeHtml(a[i])}</span>`);
+      i++;
+    }
+  }
+  return { beforeHtml: beforeParts.join(" "), afterHtml: afterParts.join(" ") };
+}
+
+function renderDiffLearnBox(mode, newLessons, noChangeDetected) {
+  const isTicker = mode === "ticker";
+  const boxId = isTicker ? "tickerDiffLearnBox" : "newsDiffLearnBox";
+  const box = document.getElementById(boxId);
+  if (!box) return;
+  const bucket = isTicker ? "ticker" : "news";
+  const allSaved = (state.learnedEdits && state.learnedEdits[bucket]) || [];
+
+  let html = `
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+      <strong style="font-size:0.9rem; color:var(--ok);">
+        ${noChangeDetected
+          ? "ℹ️ لم يُرصد فرق جديد بعد — عدّل داخل النص أعلاه ثم اضغط «مقارنة التعديلات»"
+          : `✅ تمت مقارنة تعديلاتك وحفظ (${newLessons.length}) تصويب ليتعلم منها النموذج تلقائياً!`}
+      </strong>
+      <button class="btn btn-outline btn-sm" style="padding:3px 9px; font-size:0.76rem;" onclick="hideDiffBox('${bucket}')">✖ إخفاء</button>
+    </div>
+  `;
+
+  if (newLessons.length > 0) {
+    html += newLessons.map((item, idx) => {
+      const diff = computeWordDiffHtml(item.before, item.after);
+      return `
+        <div class="diff-card">
+          ${item.before ? `<div class="diff-row-before">🔴 <strong>قبل التعديل:</strong> ${diff.beforeHtml}</div>` : ""}
+          <div class="diff-row-after">🟢 <strong>بعد تعديلك (تعلّمه النموذج):</strong> ${diff.afterHtml}</div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  if (allSaved.length > 0) {
+    html += `
+      <details style="margin-top:9px; font-size:0.82rem;" ${noChangeDetected ? "open" : ""}>
+        <summary style="cursor:pointer; font-weight:700; color:var(--primary);">
+          📚 سجل التعديلات المتعلَّمة النشطة حالياً (${allSaved.length})
+        </summary>
+        <div style="margin-top:6px;">
+          ${allSaved.slice(0, 12).map((it, idx) => `
+            <div class="diff-card" style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+              <div style="flex:1; min-width:0;">
+                ${it.before ? `<div class="diff-row-before">❌ ${escapeHtml(it.before)}</div>` : ""}
+                <div class="diff-row-after">✅ ${escapeHtml(it.after)}</div>
+              </div>
+              <button class="btn btn-outline btn-sm" style="padding:2px 7px; font-size:0.74rem;" onclick="deleteLearnedEdit('${bucket}', ${idx})" title="حذف هذا التصويب">🗑️</button>
+            </div>
+          `).join("")}
+        </div>
+      </details>
+    `;
+  }
+
+  box.innerHTML = html;
+  box.style.display = "block";
+}
+
+function deleteLearnedEdit(mode, idx) {
+  const bucket = mode === "ticker" ? "ticker" : "news";
+  if (!state.learnedEdits || !Array.isArray(state.learnedEdits[bucket])) return;
+  state.learnedEdits[bucket].splice(idx, 1);
+  SafeStorage.set("nr_learned_edits_v1", state.learnedEdits);
+  renderDiffLearnBox(bucket, [], true);
+  showToast("🗑️ تم حذف التصويب من ذاكرة التعلّم");
+}
+
 async function saveManualEditsForLearning(mode) {
   const isTicker = mode === "ticker";
   const outId = isTicker ? "tickerOutput" : "editedNewsOutput";
@@ -912,7 +1032,7 @@ async function saveManualEditsForLearning(mode) {
     const tokenize = (s) => s.split(/\s+/).filter(w => w.length > 1);
 
     for (const afterLine of newLines) {
-      if (oldExactSet.has(afterLine)) continue; // Unchanged paragraph -> skip!
+      if (oldExactSet.has(afterLine)) continue;
       const afterTokens = new Set(tokenize(afterLine));
       let bestIdx = -1;
       let bestScore = 0;
@@ -933,15 +1053,16 @@ async function saveManualEditsForLearning(mode) {
     }
 
     if (newLessons.length === 0 && currentVal === prevVal.trim()) {
-      showToast("ℹ️ عدّل النص أولاً داخل الخانة ثم اضغط «حفظ تعديلاتي» ليتعلم النموذج من تصويبك");
+      renderDiffLearnBox(mode, [], true);
+      showToast("ℹ️ عدّل النص أولاً داخل الخانة ثم اضغط «مقارنة التعديلات» لرصد الفروق وحفظها");
       return;
     }
   }
 
-  // If user pasted/wrote directly without a prior AI draft or only reordered, capture representative approved lines
+  // If user pasted/wrote directly without a prior AI draft, capture representative approved lines
   if (newLessons.length === 0) {
     newLines.slice(0, 4).forEach(line => {
-      if (line.split(/\s+/).length >= 6) {
+      if (line.split(/\s+/).length >= 5) {
         newLessons.push({ before: "", after: line, ts: Date.now() });
       }
     });
@@ -962,15 +1083,17 @@ async function saveManualEditsForLearning(mode) {
   if (isTicker) state.lastAiTickerDraft = currentVal;
   else state.lastAiNewsDraft = currentVal;
 
+  renderDiffLearnBox(mode, newLessons, false);
+
   const token = (state.keys.github || "").trim();
   if (token) {
     try {
       await githubPutFile(token, "data/learned-edits.json", state.learnedEdits, "تحديث سجل التعديلات اليدوية المتعلَّمة");
-      showToast(`🧠 تم حفظ تعديلاتك (${newLessons.length} نموذج تصويب) ومزامنتها في GitHub ليتعلم منها النموذج دائماً!`);
+      showToast(`✅ تمت مقارنة وحفظ (${newLessons.length}) تعديل ومزامنتها في GitHub!`);
       return;
     } catch (e) {}
   }
-  showToast(`🧠 تم حفظ تعديلاتك (${newLessons.length} نموذج تصويب)! سيتعلم منها النموذج تلقائياً في الأشرطة القادمة`);
+  showToast(`✅ تمت مقارنة وحفظ (${newLessons.length}) تعديل ليستفيد منها النموذج لاحقاً!`);
 }
 
 // =========================================================================
@@ -1663,18 +1786,24 @@ async function pasteTo(id) {
 }
 function clearNewsDesk() {
   document.getElementById("rawNewsInput").value = ""; document.getElementById("editedNewsOutput").value = "";
+  state.lastAiNewsDraft = ""; hideDiffBox("news");
   document.getElementById("statusBar").className = "status-bar"; updateRawStats(); runQualityRadar();
 }
 function clearTickerDesk() {
   document.getElementById("rawBulletinInput").value = ""; document.getElementById("tickerOutput").value = "";
+  state.lastAiTickerDraft = ""; hideDiffBox("ticker");
   document.getElementById("tickerStatusBar").className = "status-bar"; updateBulletinStats(); runTickerRadar();
 }
 async function copyOutput(id) {
-  const t = document.getElementById(id).value.trim(); if (!t) return;
-  await copyTextSafe(t); showToast("✅ تم النسخ!");
+  const t = document.getElementById(id).value.trim();
+  if (!t) { showToast("⚠️ الخانة فارغة"); return; }
+  await copyTextSafe(t); showToast("✅ تم نسخ الخبر المحرر!");
 }
 function adoptComparison(which) {
-  document.getElementById("editedNewsOutput").value = document.getElementById("compOutput" + which).value; runQualityRadar();
+  document.getElementById("editedNewsOutput").value = document.getElementById("compOutput" + which).value;
+  state.lastAiNewsDraft = document.getElementById("editedNewsOutput").value;
+  hideDiffBox("news");
+  runQualityRadar();
 }
 function saveApiKeys() {
   state.keys = {
@@ -1745,14 +1874,14 @@ function setupPwaFeatures() {
   // Purge any old v1-v4 PWA caches automatically so updates apply immediately!
   if ("caches" in window) {
     caches.keys().then(keys => {
-      keys.filter(k => k !== "mihbarah-pwa-v15").forEach(k => caches.delete(k));
+      keys.filter(k => k !== "mihbarah-pwa-v16").forEach(k => caches.delete(k));
     }).catch(() => {});
   }
 
   // 1. Register Service Worker
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js?v=15").then(reg => {
+      navigator.serviceWorker.register("sw.js?v=16").then(reg => {
         reg.update().catch(() => {});
       }).catch(() => {});
     });

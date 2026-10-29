@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="assets/style.css?v=15" />
+  <link rel="stylesheet" href="assets/style.css?v=16" />
 </head>
 <body>
   <header class="topbar">
@@ -114,8 +114,8 @@
                 </div>
               </div>
               <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text); margin-top:4px;">
-                <input type="checkbox" id="twoStageToggle" style="width:16px; height:16px;" />
-                <span>🛡️ <strong>مراجعة مزدوجة إضافية (اختياري):</strong> تشغيل تمريرة ذكاء اصطناعي ثانية بعد التحرير (التصحيح المصطلحي يعمل تلقائياً دائماً)</span>
+                <input type="checkbox" id="twoStageToggle" checked style="width:16px; height:16px;" />
+                <span>🛡️ <strong>المراجعة المزدوجة التلقائية (مفعّلة ✅):</strong> تمريرة تدقيق ثانية بالذكاء الاصطناعي بعد التحرير لضبط القالب والأرقام بالحروف والمصطلحات</span>
               </label>
               <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text); margin-top:4px;">
                 <input type="checkbox" id="compareModeToggle" onchange="toggleCompareUI()" style="width:16px; height:16px;" />
@@ -189,16 +189,19 @@
               </div>
             </div>
 
-            <textarea id="editedNewsOutput" rows="12" placeholder="الخبر المحرر بالقالب المعتمد (ترويسة المنطقة + كبشن + مقدمة + lvo + تفاصيل + خاتمة) يظهر هنا..." oninput="runQualityRadar()"></textarea>
+            <textarea id="editedNewsOutput" rows="12" placeholder="الخبر المحرر بالقالب المعتمد (ترويسة المنطقة + كبشن + مقدمة + lvo + تفاصيل + خاتمة) يظهر هنا..." onpaste="captureInitialPasteDraft('news')" oninput="runQualityRadar()"></textarea>
 
-            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-top:7px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-top:9px;">
               <span id="editedStats" class="muted-note">0 كلمة | 0 حرف</span>
               <div style="display:flex; gap:6px; flex-wrap:wrap;">
-                <button class="btn btn-ok btn-sm" onclick="saveManualEditsForLearning('news')" title="يحفظ التعديلات اليدوية التي أجريتها داخل مربع الخبر ليتعلم منها النموذج لاحقاً">🧠 حفظ تعديلاتي ليتعلم منها النموذج</button>
+                <button class="btn btn-primary btn-sm" onclick="copyOutput('editedNewsOutput')">📋 نسخ الخبر</button>
+                <button class="btn btn-ok btn-sm" onclick="saveManualEditsForLearning('news')" title="يقارن نص النموذج بتعديلاتك اليدوية ويعرض الفروق ويحفظها ليستفيد منها النموذج لاحقاً">🔍 مقارنة التعديلات والاستفادة منها لاحقاً</button>
                 <button class="btn btn-outline btn-sm" onclick="sendEditedNewsToTicker()">📺 أرسل للشريط الإخباري</button>
                 <button class="btn btn-warn btn-sm" onclick="saveCurrentNewsAsExample()">⭐ حفظ كمثال معتمد</button>
               </div>
             </div>
+
+            <div id="newsDiffLearnBox" class="diff-learn-box" style="display:none;"></div>
 
             <!-- Post-Edit Revision Note + Save as Rule -->
             <div class="radar-box" style="margin-top:11px; border: 1.5px solid var(--primary); background: var(--surface-alt, var(--bg));">
@@ -350,17 +353,19 @@
 
             <div id="tickerStatusBar" class="status-bar"><span id="tickerStatusText"></span></div>
 
-            <textarea id="tickerOutput" rows="15" placeholder="نص الشريط الإخباري يظهر هنا كنص خالص جاهز للنسخ أو التعديل اليدوي..." oninput="runTickerRadar()"></textarea>
+            <textarea id="tickerOutput" rows="15" placeholder="نص الشريط الإخباري يظهر هنا كنص خالص جاهز للنسخ أو التعديل اليدوي..." onpaste="captureInitialPasteDraft('ticker')" oninput="runTickerRadar()"></textarea>
 
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-top:9px;">
               <span id="tickerStats" class="muted-note">0 فقرة شريط | 0 كلمة صافية</span>
               <div style="display:flex; gap:6px; flex-wrap:wrap;">
-                <button class="btn btn-ok btn-sm" onclick="saveManualEditsForLearning('ticker')" title="إذا عدّلت أي فقرة يدوياً في مربع الشريط أعلاه، اضغط هنا ليحفظ النموذج تعديلاتك ويتعلم منها في الأشرطة القادمة!">
-                  🧠 حفظ تعديلاتي اليدوية ليتعلم منها النموذج لاحقاً
+                <button class="btn btn-ticker btn-sm" onclick="copyFormattedTicker()">📋 نسخ نص الشريط</button>
+                <button class="btn btn-ok btn-sm" onclick="saveManualEditsForLearning('ticker')" title="يقارن نص الشريط بتعديلاتك اليدوية ويحفظها ليستفيد منها النموذج في الأشرطة القادمة">
+                  🔍 مقارنة التعديلات والاستفادة منها لاحقاً
                 </button>
-                <button class="btn btn-ticker btn-sm" onclick="copyFormattedTicker()">📋 نسخ الشريط</button>
               </div>
             </div>
+
+            <div id="tickerDiffLearnBox" class="diff-learn-box" style="display:none;"></div>
 
             <!-- Post-Edit Ticker Revision Note + Save as Ticker Rule -->
             <div class="radar-box" style="margin-top:11px; border: 1.5px solid var(--ticker);">
@@ -569,6 +574,6 @@
   </div>
 
   <div id="toast" class="toast"></div>
-  <script src="assets/app.js?v=15"></script>
+  <script src="assets/app.js?v=16"></script>
 </body>
 </html>

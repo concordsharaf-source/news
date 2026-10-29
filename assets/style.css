@@ -160,6 +160,26 @@ label { display: block; font-size: 0.82rem; font-weight: 700; margin-bottom: 4px
 .chip-ok { background: var(--ok-soft); color: var(--ok); }
 .chip-warn { background: var(--warn-soft); color: var(--warn); }
 .chip-err { background: var(--danger-soft); color: var(--danger); }
+.diff-learn-box {
+  margin-top: 10px; padding: 11px 13px; border-radius: 10px;
+  background: var(--surface-2, var(--bg)); border: 1.5px solid var(--ok);
+  max-width: 100%; min-width: 0; word-break: break-word;
+}
+.diff-card {
+  margin-top: 8px; padding: 9px 11px; border-radius: 8px;
+  background: var(--surface); border: 1px solid var(--border);
+  font-size: 0.85rem; line-height: 1.65;
+}
+.diff-row-before { color: var(--muted); margin-bottom: 4px; }
+.diff-row-after { color: var(--text); font-weight: 600; }
+.diff-del {
+  background: var(--danger-soft); color: var(--danger);
+  text-decoration: line-through; padding: 1px 5px; border-radius: 4px; font-weight: 700;
+}
+.diff-add {
+  background: var(--ok-soft); color: var(--ok);
+  padding: 1px 5px; border-radius: 4px; font-weight: 800;
+}
 .ticker-line-card.overlimit { border-color: var(--danger); background: var(--danger-soft); }
 .compare-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
 @media (max-width: 720px) { .compare-grid { grid-template-columns: minmax(0, 1fr); } }
