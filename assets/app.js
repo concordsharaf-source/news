@@ -85,6 +85,9 @@ let state = {
   dictionary: [],
   localNewsExamples: SafeStorage.get("nr_local_news_ex", []),
   localTickerExamples: SafeStorage.get("nr_local_ticker_ex", []),
+  learnedEdits: SafeStorage.get("nr_learned_edits_v1", { news: [], ticker: [] }),
+  lastAiNewsDraft: "",
+  lastAiTickerDraft: "",
   keys: SafeStorage.get("nr_keys_v1", { groq: "", openrouter: "", gemini: "", github: "" }),
   selectedFormat: "lvo_standard",
   ruleSubTab: "news",
@@ -123,15 +126,16 @@ async function init() {
 
   populateEngineSelectors();
 
-  const [nRules, tRules, dict, nIdx, tIdx] = await Promise.all([
+  const [nRules, tRules, dict, nIdx, tIdx, repoLearned] = await Promise.all([
     fetchJsonSafe("data/news-rules.json", []),
     fetchJsonSafe("data/ticker-rules.json", []),
     fetchJsonSafe("data/dictionary.json", []),
     fetchJsonSafe("data/news-examples/index.json", []),
-    fetchJsonSafe("data/ticker-examples/index.json", [])
+    fetchJsonSafe("data/ticker-examples/index.json", []),
+    fetchJsonSafe("data/learned-edits.json", { news: [], ticker: [] })
   ]);
 
-  repoDefaults = { newsRules: nRules, tickerRules: tRules, dictionary: dict, newsIndex: nIdx, tickerIndex: tIdx };
+  repoDefaults = { newsRules: nRules, tickerRules: tRules, dictionary: dict, newsIndex: nIdx, tickerIndex: tIdx, learnedEdits: repoLearned };
 
   // Smart merge: keep user-added local rules AND adopt newly added/updated repo rules!
   function mergeRulesSmart(repoList, localList) {
@@ -167,9 +171,24 @@ async function init() {
   state.newsRules = mergeRulesSmart(nRules, localNewsOverride);
   state.tickerRules = mergeRulesSmart(tRules, localTickerOverride);
   state.dictionary = mergeDictSmart(dict, localDictOverride);
+  // Merge learned edits from repo + local browser
+  const mergeLearnedList = (rArr = [], lArr = []) => {
+    const seen = new Set();
+    return [...lArr, ...rArr].filter(it => {
+      const k = `${it.before || ""}->${it.after || ""}`;
+      if (!it.after || seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    }).slice(0, 25);
+  };
+  state.learnedEdits = {
+    news: mergeLearnedList(repoLearned?.news, state.learnedEdits?.news),
+    ticker: mergeLearnedList(repoLearned?.ticker, state.learnedEdits?.ticker)
+  };
   SafeStorage.set("nr_rules_override_v2", state.newsRules);
   SafeStorage.set("nr_ticker_rules_override_v2", state.tickerRules);
   SafeStorage.set("nr_dict_override_v2", state.dictionary);
+  SafeStorage.set("nr_learned_edits_v1", state.learnedEdits);
 
   renderRules();
   renderExamples();
@@ -231,6 +250,8 @@ async function pasteAndAuditOutput(targetId) {
     }
     document.getElementById(targetId).value = t.trim();
     autoFixArabicErrors(targetId);
+    if (targetId === "tickerOutput") state.lastAiTickerDraft = document.getElementById(targetId).value;
+    if (targetId === "editedNewsOutput") state.lastAiNewsDraft = document.getElementById(targetId).value;
     showToast("✅ تم لصق النتيجة وتصحيح المصطلحات وفحصها بالرادار فوراً!");
   } catch (e) {
     showToast("اضغط داخل مربع المخرجات واستخدم Ctrl+V للصق ثم اضغط «✨ تصحيح»");
@@ -283,6 +304,11 @@ async function buildEditorialPrompt(rawText) {
   const examplesBlock = chosenExamples.map((ex, idx) =>
     `<مثال_${idx + 1}>\n[الخبر الخام]:\n${ex.raw}\n\n[الصياغة المحررة المعتمدة لدينا]:\n${ex.edited}\n</مثال_${idx + 1}>`
   ).join("\n\n");
+  const learnedNewsBlock = (state.learnedEdits?.news || []).slice(0, 12).map(it =>
+    it.before
+      ? `- تجنّب صياغة: «${it.before}» ⬅ واعتمد أسلوب المحرر: «${it.after}»`
+      : `- صياغة معتمدة من المحرر: «${it.after}»`
+  ).join("\n");
 
   let frontHint = "";
   if (cat === "غزة") frontHint = "تنبيه جبهة غزة: التزم تسمية «قوات العدو الصهيوني»، و«استشهاد» بدل «مقتل»، ووصف العدوان بـ «حرب الإبادة الصهيونية»، ووقف إطلاق النار بـ «هدنة هشة»، و«فلسطيني» بدل «مواطن».";
@@ -303,7 +329,7 @@ ${frontHint}
 - تذكير حاسم بالاختصار: احذف أي خلفيات تاريخية أو سياسية طويلة، واحتفظ فقط بأهم الوقائع المرتبطة مباشرة بالحدث، ولا تكرر المعلومة نفسها بصيغ مختلفة، ولا تستخدم عبارات تفسيرية أو إنشائية أو تحليلية.
 </قائمة_المصطلحات_الثابتة_وقواعد_الاختصار>
 
-${examplesBlock ? `<الأمثلة_المرجعية_لتعلّم_الأسلوب_والقالب_فقط>
+${learnedNewsBlock ? `<تعديلات_يدوية_سابقة_للمحرر_يجب_التعلم_منها>\n${learnedNewsBlock}\n</تعديلات_يدوية_سابقة_للمحرر_يجب_التعلم_منها>\n\n` : ""}${examplesBlock ? `<الأمثلة_المرجعية_لتعلّم_الأسلوب_والقالب_فقط>
 تنبيه حاسم: هذه الأمثلة لتعلّم القالب والأسلوب فقط؛ إياك أن تنقل منها أي واقعة أو حصيلة إلى خبر اليوم!
 ${examplesBlock}
 </الأمثلة_المرجعية_لتعلّم_الأسلوب_والقالب_فقط>` : ""}
@@ -341,6 +367,11 @@ async function buildTickerPrompt(rawBulletin) {
   const examplesBlock = chosenExamples.map((ex, idx) =>
     `مثال توضيحي (${idx + 1}) لطريقة التفكيك والفاصل فقط (لا تنقل أخباره):\n[المدخل]:\n${ex.raw}\n\n[المخرج المطلوب]:\n${ex.edited}`
   ).join("\n\n");
+  const learnedTickerBlock = (state.learnedEdits?.ticker || []).slice(0, 15).map(it =>
+    it.before
+      ? `- خطأ سابق تم تعديله يدوياً: لا تكتب «${it.before}» ⬅ بل اكتب بأسلوب المحرر: «${it.after}»`
+      : `- نموذج فقرة معتمدة عدّلها المحرر يدوياً: «${it.after}»`
+  ).join("\n");
 
   const separatorInstruction = sepMode === "bitmap"
     ? `ضع بعد كل فقرة سطراً فارغاً ثم السطر التالي حرفياً:\n<BITMAP>E:\\NEWS\\Logo.png</BITMAP>\nثم سطراً فارغاً قبل الفقرة التالية.`
@@ -356,7 +387,7 @@ ${rulesBlock}
 - احذف رموز الإخراج (lvo، Ss، Vt، Clip، Vb، مشاهد) والنقطة في نهاية السطر، والتزم بالمصطلحات المعتمدة: (${dictBlock}).
 - ${separatorInstruction}
 ${extraNote ? `- توجيه إضافي: ${extraNote}` : ""}
-
+${learnedTickerBlock ? `\nتصحيحات يدوية سابقة اعتمدها المحرر في الأشرطة الماضية (تعلّم منها والتزم بأسلوبها دون نقل أخبارها):\n${learnedTickerBlock}\n` : ""}
 ${examplesBlock ? `${examplesBlock}\n\n---\n` : ""}النص الإخباري المطلوب تفكيكه وتحويله إلى شريط إخباري الآن:
 """
 ${rawBulletin}
@@ -526,6 +557,9 @@ async function runEditorialWorkflow() {
   const sMod = document.getElementById("secondaryModelSelect").value;
 
   btn.disabled = true;
+  document.getElementById("editedNewsOutput").value = "";
+  state.lastAiNewsDraft = "";
+  runQualityRadar();
   try {
     const prompt = await buildEditorialPrompt(raw);
     if (compareOn) {
@@ -537,6 +571,8 @@ async function runEditorialWorkflow() {
       document.getElementById("compOutputB").value = textB;
       if (resA.status === "fulfilled") document.getElementById("editedNewsOutput").value = textA;
       else if (resB.status === "fulfilled") document.getElementById("editedNewsOutput").value = textB;
+      autoFixArabicErrors("editedNewsOutput", true);
+      state.lastAiNewsDraft = document.getElementById("editedNewsOutput").value;
       runQualityRadar();
       setStatus("statusBar", "statusText", "ok", "✅ اكتملت المقارنة!");
     } else {
@@ -551,6 +587,7 @@ async function runEditorialWorkflow() {
         document.getElementById("editedNewsOutput").value = draft;
       }
       autoFixArabicErrors("editedNewsOutput", true);
+      state.lastAiNewsDraft = document.getElementById("editedNewsOutput").value;
       setStatus("statusBar", "statusText", "ok", "✅ تم التحرير والتدقيق وفق السياسة التحريرية بنجاح!");
     }
   } catch (err) {
@@ -570,8 +607,12 @@ async function runTickerWorkflow() {
   const pMod = (document.getElementById("tickerModelSelect") || document.getElementById("primaryModelSelect")).value;
 
   btn.disabled = true;
+  // Clear previous ticker immediately when starting a new one!
+  document.getElementById("tickerOutput").value = "";
+  state.lastAiTickerDraft = "";
+  runTickerRadar();
   try {
-    setStatus("tickerStatusBar", "tickerStatusText", "info", "⏳ المرحلة 1: جاري تفكيك النشرة إلى فقرات شريط إخباري...");
+    setStatus("tickerStatusBar", "tickerStatusText", "info", "⏳ جاري تفكيك النشرة إلى نص شريط إخباري جاهز للنسخ...");
     const prompt = await buildTickerPrompt(raw);
     let tickerDraft = normalizeTickerLines(cleanAiMetaText(await callModel(pEng, pMod, prompt)));
     document.getElementById("tickerOutput").value = tickerDraft;
@@ -583,7 +624,8 @@ async function runTickerWorkflow() {
       document.getElementById("tickerOutput").value = tickerDraft;
     }
     autoFixArabicErrors("tickerOutput", true);
-    setStatus("tickerStatusBar", "tickerStatusText", "ok", "✅ تم تفكيك النشرة وتدقيق الشريط بنجاح!");
+    state.lastAiTickerDraft = document.getElementById("tickerOutput").value;
+    setStatus("tickerStatusBar", "tickerStatusText", "ok", "✅ تم استخراج الشريط النصي! يمكنك نسخه مباشرة أو تعديله وحفظ التعديلات ليتعلم منها النموذج.");
   } catch (err) {
     setStatus("tickerStatusBar", "tickerStatusText", "err", `⚠️ ${err.message}`);
   } finally {
@@ -845,6 +887,92 @@ async function applyRevisionNote(mode, saveAsRule) {
   }
 }
 
+async function saveManualEditsForLearning(mode) {
+  const isTicker = mode === "ticker";
+  const outId = isTicker ? "tickerOutput" : "editedNewsOutput";
+  const currentVal = document.getElementById(outId).value.trim();
+  if (!currentVal) {
+    showToast(isTicker ? "⚠️ خانة الشريط المخرج فارغة!" : "⚠️ خانة الخبر المحرر فارغة!");
+    return;
+  }
+
+  const prevVal = isTicker ? (state.lastAiTickerDraft || "") : (state.lastAiNewsDraft || "");
+  const extractLines = (txt) => isTicker
+    ? extractPureTickerParagraphs(txt)
+    : txt.split(/\n+/).map(l => l.trim()).filter(l => l && !/^lvo$/i.test(l));
+
+  const oldLines = extractLines(prevVal);
+  const newLines = extractLines(currentVal);
+
+  const newLessons = [];
+  if (oldLines.length > 0) {
+    const oldExactSet = new Set(oldLines);
+    const candidateOld = oldLines.filter(l => !newLines.includes(l));
+    const usedOldIdx = new Set();
+    const tokenize = (s) => s.split(/\s+/).filter(w => w.length > 1);
+
+    for (const afterLine of newLines) {
+      if (oldExactSet.has(afterLine)) continue; // Unchanged paragraph -> skip!
+      const afterTokens = new Set(tokenize(afterLine));
+      let bestIdx = -1;
+      let bestScore = 0;
+      candidateOld.forEach((beforeLine, idx) => {
+        if (usedOldIdx.has(idx)) return;
+        const bTokens = tokenize(beforeLine);
+        if (!bTokens.length || !afterTokens.size) return;
+        const shared = bTokens.filter(t => afterTokens.has(t)).length;
+        const score = shared / Math.min(bTokens.length, afterTokens.size);
+        if (score > bestScore) { bestScore = score; bestIdx = idx; }
+      });
+      if (bestIdx !== -1 && bestScore >= 0.3) {
+        usedOldIdx.add(bestIdx);
+        newLessons.push({ before: candidateOld[bestIdx], after: afterLine, ts: Date.now() });
+      } else if (afterLine.split(/\s+/).length >= 5) {
+        newLessons.push({ before: "", after: afterLine, ts: Date.now() });
+      }
+    }
+
+    if (newLessons.length === 0 && currentVal === prevVal.trim()) {
+      showToast("ℹ️ عدّل النص أولاً داخل الخانة ثم اضغط «حفظ تعديلاتي» ليتعلم النموذج من تصويبك");
+      return;
+    }
+  }
+
+  // If user pasted/wrote directly without a prior AI draft or only reordered, capture representative approved lines
+  if (newLessons.length === 0) {
+    newLines.slice(0, 4).forEach(line => {
+      if (line.split(/\s+/).length >= 6) {
+        newLessons.push({ before: "", after: line, ts: Date.now() });
+      }
+    });
+  }
+
+  const bucket = isTicker ? "ticker" : "news";
+  if (!state.learnedEdits) state.learnedEdits = { news: [], ticker: [] };
+  const combined = [...newLessons, ...(state.learnedEdits[bucket] || [])];
+  const seen = new Set();
+  state.learnedEdits[bucket] = combined.filter(it => {
+    const k = `${it.before || ""}->${it.after || ""}`;
+    if (!it.after || seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  }).slice(0, 25);
+
+  SafeStorage.set("nr_learned_edits_v1", state.learnedEdits);
+  if (isTicker) state.lastAiTickerDraft = currentVal;
+  else state.lastAiNewsDraft = currentVal;
+
+  const token = (state.keys.github || "").trim();
+  if (token) {
+    try {
+      await githubPutFile(token, "data/learned-edits.json", state.learnedEdits, "تحديث سجل التعديلات اليدوية المتعلَّمة");
+      showToast(`🧠 تم حفظ تعديلاتك (${newLessons.length} نموذج تصويب) ومزامنتها في GitHub ليتعلم منها النموذج دائماً!`);
+      return;
+    } catch (e) {}
+  }
+  showToast(`🧠 تم حفظ تعديلاتك (${newLessons.length} نموذج تصويب)! سيتعلم منها النموذج تلقائياً في الأشرطة القادمة`);
+}
+
 // =========================================================================
 // Strict Policy Radar (Tailored 100% to User's Editorial Rules!)
 // =========================================================================
@@ -1005,17 +1133,15 @@ function runTickerRadar() {
   const pureJoined = items.join("\n");
   const totalWords = items.reduce((sum, line) => sum + line.split(/\s+/).filter(Boolean).length, 0);
   document.getElementById("tickerStats").textContent =
-    `${items.length} فقرة شريط | ${totalWords} كلمة صافية (المستهدف لنشرة كاملة: 800–1000 كلمة)`;
-  refreshTickerPreviewBar();
+    `${items.length} فقرة شريط | ${totalWords} كلمة صافية`;
 
   const alertsBox = document.getElementById("tickerAlertsChips");
-  const linesBox = document.getElementById("tickerLinesInspector");
   const badge = document.getElementById("tickerRadarBadge");
+  if (!alertsBox || !badge) return;
 
   if (!items.length) {
     badge.className = "chip chip-ok"; badge.textContent = "بانتظار الشريط";
-    alertsBox.innerHTML = `<span class="muted-note">يفحص تلقائياً: الطول (10–25 كلمة)، الفاعل أولاً، الأرقام بالرموز، الفاصل &lt;BITMAP&gt;، والمصطلحات الثابتة.</span>`;
-    linesBox.innerHTML = "";
+    alertsBox.innerHTML = `<span class="muted-note">يفحص الطول (10–25 كلمة)، الفاعل أولاً، الأرقام بالرموز، الفاصل &lt;BITMAP&gt;، والمصطلحات.</span>`;
     return;
   }
 
@@ -1054,24 +1180,13 @@ function runTickerRadar() {
   let tooShortCount = 0;
   let verbFirstCount = 0;
 
-  linesBox.innerHTML = items.map((line, i) => {
+  items.forEach((line, i) => {
     const wc = line.split(/\s+/).length;
-    const isOver = wc > maxWords;
-    const isTooShort = wc < 7;
-    const hasDangling = danglingRegex.test(line);
-    const hasVerbFirst = verbFirstRegex.test(line);
-    if (isOver) overLimitCount++;
-    if (isTooShort) tooShortCount++;
-    if (hasVerbFirst) verbFirstCount++;
-    if (hasDangling) issues.push({ type: "err", msg: `فقرة #${i + 1} تبدأ بضمير عائم (${line.split(" ")[0]}...) بلا ذكر المصدر!` });
-    const badCard = isOver || isTooShort || hasDangling || hasVerbFirst;
-    const chipLabel = isTooShort ? `${wc} كلمات (قصيرة جداً)` : (hasVerbFirst ? `${wc} كلمة (بدأت بفعل!)` : `${wc} / ${maxWords} كلمة`);
-    return `
-      <div class="ticker-line-card ${badCard ? 'overlimit' : ''}">
-        <span style="flex:1;"><strong>#${i + 1}:</strong> ${escapeHtml(line)}</span>
-        <span class="chip ${badCard ? 'chip-err' : 'chip-ok'}">${chipLabel}</span>
-      </div>`;
-  }).join("");
+    if (wc > maxWords) overLimitCount++;
+    if (wc < 7) tooShortCount++;
+    if (verbFirstRegex.test(line)) verbFirstCount++;
+    if (danglingRegex.test(line)) issues.push({ type: "err", msg: `فقرة #${i + 1} تبدأ بضمير عائم (${line.split(" ")[0]}...) بلا ذكر المصدر!` });
+  });
 
   if (verbFirstCount > 0) issues.unshift({ type: "warn", msg: `👤 (${verbFirstCount}) فقرة بدأت بالفعل بدل الفاعل — القاعدة 5: الفاعل أولاً (وزارة الصحة تعلن... / استشهاد 3...)` });
   if (overLimitCount > 0) issues.unshift({ type: "warn", msg: `📏 (${overLimitCount}) فقرة تتجاوز ${maxWords} كلمة` });
@@ -1265,6 +1380,7 @@ async function syncToGitHubRepo() {
     await githubPutFile(token, "data/news-rules.json", state.newsRules, "تحديث قواعد تحرير الأخبار");
     await githubPutFile(token, "data/ticker-rules.json", state.tickerRules, "تحديث قواعد الشريط الإخباري");
     await githubPutFile(token, "data/dictionary.json", state.dictionary, "تحديث قاموس المصطلحات الثابتة");
+    await githubPutFile(token, "data/learned-edits.json", state.learnedEdits || { news: [], ticker: [] }, "تحديث التعديلات المتعلَّمة");
 
     // Promote any local examples into their own separate JSON files in GitHub!
     if (state.localNewsExamples.length > 0) {
@@ -1444,14 +1560,27 @@ async function getCompiledByMode(mode) {
   return await buildEditorialPrompt(document.getElementById("rawNewsInput").value.trim() || "[الصق الخبر الخام هنا]");
 }
 
+function clearPreviousTickerIfAny() {
+  const out = document.getElementById("tickerOutput");
+  if (out && out.value) {
+    out.value = "";
+    state.lastAiTickerDraft = "";
+    const bar = document.getElementById("tickerStatusBar");
+    if (bar) bar.className = "status-bar";
+    runTickerRadar();
+  }
+}
+
 async function copyCompiledPrompt(mode) {
+  if (mode === "ticker") clearPreviousTickerIfAny();
   await copyTextSafe(await getCompiledByMode(mode));
-  showToast("📋 تم نسخ الأمر الشامل مع القواعد الـ 23 والمصطلحات الثابتة!");
+  showToast("📋 تم نسخ الأمر الشامل مع القواعد والمصطلحات الثابتة!");
 }
 
 async function copyAndOpenWeb(mode, url, siteName) {
   const inputId = mode === "ticker" ? "rawBulletinInput" : "rawNewsInput";
   if (!document.getElementById(inputId).value.trim()) { showToast("⚠️ الصق النص الخام أولاً!"); return; }
+  if (mode === "ticker") clearPreviousTickerIfAny();
   await copyTextSafe(await getCompiledByMode(mode));
   showToast(`✅ نُسخ الأمر الكامل! الصقه (Ctrl+V) داخل ${siteName}`);
   window.open(url, "_blank", "noopener");
@@ -1466,14 +1595,10 @@ function formatTickerForExport() {
   const items = getCleanTickerItems();
   return formatPureTickerItems(items);
 }
-function refreshTickerPreviewBar() {
-  const items = getCleanTickerItems();
-  document.getElementById("liveTvCrawlPreview").textContent = items.length ? items.join("   🔴   ") : "معاينة فقرات الشريط على الشاشة...";
-}
 async function copyFormattedTicker() {
   const out = formatTickerForExport();
   if (!out) { showToast("⚠️ الشريط فارغ"); return; }
-  await copyTextSafe(out); showToast("✅ تم نسخ الشريط جاهزاً للبث مع الفاصل!");
+  await copyTextSafe(out); showToast("✅ تم نسخ نص الشريط بالكامل!");
 }
 function downloadTickerTxt() {
   const out = formatTickerForExport();
@@ -1485,17 +1610,26 @@ function downloadTickerTxt() {
 function sendEditedNewsToTicker() {
   const source = document.getElementById("editedNewsOutput").value.trim() || document.getElementById("rawNewsInput").value.trim();
   if (!source) return;
-  const cur = document.getElementById("rawBulletinInput").value.trim();
-  document.getElementById("rawBulletinInput").value = cur ? (cur + "\n\n" + source) : source;
-  updateBulletinStats(); switchTab("ticker", document.querySelectorAll(".tab-btn")[1]);
+  // Replace previous bulletin & clear previous ticker output cleanly!
+  document.getElementById("rawBulletinInput").value = source;
+  document.getElementById("tickerOutput").value = "";
+  state.lastAiTickerDraft = "";
+  document.getElementById("tickerStatusBar").className = "status-bar";
+  updateBulletinStats(); runTickerRadar();
+  switchTab("ticker", document.querySelectorAll(".tab-btn")[1]);
 }
 function loadSampleRawNews() {
   document.getElementById("rawNewsInput").value = `مراسل وكالة رويترز: اليوم الأربعاء الموافق 29 تشرين الأول استشهد 7 مواطنين وأصيب 15 آخرين جراء قصف طائرات الجيش الإسرائيلي لخيام النازحين في شمال شرق مدينة رفح جنوب قطاع غزة، إلى جانب تدمير 3 منازل مجاورة، وقالت مصادر طبية أمس إن أكثر من 500 جريح بحاجة لتدخل جراحي عاجل في ظل استمرار خرق وقف إطلاق النار.`;
+  document.getElementById("editedNewsOutput").value = "";
+  state.lastAiNewsDraft = "";
   updateRawStats(); runQualityRadar();
-  showToast("🧪 أُدرج خبر خام تجريبي لاختبار تحويل الأرقام للحروف وفاصل lvo والمصطلحات الثابتة!");
+  showToast("🧪 أُدرج خبر خام تجريبي!");
 }
 function loadSampleBulletin() {
   document.getElementById("rawBulletinInput").value = `قطاع غزة\nشهداء وجرحى بغارات للعدو الصهيوني على النصيرات\nاستشهد أربعة فلسطينيين وأصيب اثنا عشر آخرون نتيجة قصف طائرات العدو الصهيوني منزلاً في مخيم النصيرات وسط قطاع غزة.\nlvo\nوأفادت مصادر طبية أن من بين الشهداء طفلين وامرأتين.\n\nبيان القوات المسلحة اليمنية\nأكد المتحدث باسم القوات المسلحة العميد يحيى سريع تنفيذ عملية عسكرية استهدفت هدفاً حيوياً للعدو الصهيوني في يافا المحتلة.\nSs\nوأوضح العميد يحيى سريع أن العملية نُفذت بصاروخ باليستي فرط صوتي وحققت هدفها بنجاح.\n\nالضفة الغربية\nاعتقالات في الخليل\nاعتقلت قوات الاحتلال الصهيوني عشرين فلسطينياً خلال حملة مداهمة في محافظة الخليل.\nVt`;
+  document.getElementById("tickerOutput").value = "";
+  state.lastAiTickerDraft = "";
+  document.getElementById("tickerStatusBar").className = "status-bar";
   updateBulletinStats(); runTickerRadar();
 }
 function updateRawStats() {
@@ -1507,7 +1641,24 @@ function updateBulletinStats() {
   document.getElementById("bulletinStats").textContent = `${t.trim() ? t.trim().split(/\s+/).length : 0} كلمة | ${t.length} حرف`;
 }
 async function pasteTo(id) {
-  try { const t = await navigator.clipboard.readText(); if (t) { document.getElementById(id).value = t; updateRawStats(); updateBulletinStats(); } }
+  try {
+    const t = await navigator.clipboard.readText();
+    if (t) {
+      document.getElementById(id).value = t;
+      if (id === "rawBulletinInput") {
+        document.getElementById("tickerOutput").value = "";
+        state.lastAiTickerDraft = "";
+        document.getElementById("tickerStatusBar").className = "status-bar";
+        runTickerRadar();
+      }
+      if (id === "rawNewsInput") {
+        document.getElementById("editedNewsOutput").value = "";
+        state.lastAiNewsDraft = "";
+        runQualityRadar();
+      }
+      updateRawStats(); updateBulletinStats();
+    }
+  }
   catch (e) { showToast("اضغط داخل المربع واستخدم Ctrl+V"); }
 }
 function clearNewsDesk() {
@@ -1594,14 +1745,14 @@ function setupPwaFeatures() {
   // Purge any old v1-v4 PWA caches automatically so updates apply immediately!
   if ("caches" in window) {
     caches.keys().then(keys => {
-      keys.filter(k => k !== "mihbarah-pwa-v14").forEach(k => caches.delete(k));
+      keys.filter(k => k !== "mihbarah-pwa-v15").forEach(k => caches.delete(k));
     }).catch(() => {});
   }
 
   // 1. Register Service Worker
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js?v=14").then(reg => {
+      navigator.serviceWorker.register("sw.js?v=15").then(reg => {
         reg.update().catch(() => {});
       }).catch(() => {});
     });

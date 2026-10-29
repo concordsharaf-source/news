@@ -160,18 +160,6 @@ label { display: block; font-size: 0.82rem; font-weight: 700; margin-bottom: 4px
 .chip-ok { background: var(--ok-soft); color: var(--ok); }
 .chip-warn { background: var(--warn-soft); color: var(--warn); }
 .chip-err { background: var(--danger-soft); color: var(--danger); }
-.tv-ticker-wrap {
-  margin-top: 12px; background: #111827; color: #ffffff; border-radius: 10px;
-  overflow: hidden; display: flex; align-items: center; border: 2px solid var(--ticker);
-  width: 100%; max-width: 100%; min-width: 0;
-}
-.tv-ticker-badge { background: var(--ticker); color: #fff; font-weight: 800; font-size: 0.82rem; padding: 9px 13px; white-space: nowrap; flex-shrink: 0; }
-.tv-ticker-track { padding: 8px 14px; font-size: 0.88rem; font-weight: 700; white-space: nowrap; overflow-x: auto; direction: rtl; flex: 1; min-width: 0; max-width: 100%; }
-.ticker-item-preview { margin-top: 10px; max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; max-width: 100%; }
-.ticker-line-card {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; word-break: break-word;
-  padding: 7px 11px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); font-size: 0.85rem;
-}
 .ticker-line-card.overlimit { border-color: var(--danger); background: var(--danger-soft); }
 .compare-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
 @media (max-width: 720px) { .compare-grid { grid-template-columns: minmax(0, 1fr); } }

@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="assets/style.css?v=14" />
+  <link rel="stylesheet" href="assets/style.css?v=15" />
 </head>
 <body>
   <header class="topbar">
@@ -194,6 +194,7 @@
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-top:7px;">
               <span id="editedStats" class="muted-note">0 كلمة | 0 حرف</span>
               <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                <button class="btn btn-ok btn-sm" onclick="saveManualEditsForLearning('news')" title="يحفظ التعديلات اليدوية التي أجريتها داخل مربع الخبر ليتعلم منها النموذج لاحقاً">🧠 حفظ تعديلاتي ليتعلم منها النموذج</button>
                 <button class="btn btn-outline btn-sm" onclick="sendEditedNewsToTicker()">📺 أرسل للشريط الإخباري</button>
                 <button class="btn btn-warn btn-sm" onclick="saveCurrentNewsAsExample()">⭐ حفظ كمثال معتمد</button>
               </div>
@@ -258,7 +259,7 @@
               </div>
             </div>
 
-            <textarea id="rawBulletinInput" rows="11" placeholder="الصق النشرة الخام الكاملة هنا لتفكيكها إلى فقرات شريط إخباري وفق قواعد الشريط المعتمدة لديك!" oninput="updateBulletinStats(); runTickerRadar();"></textarea>
+            <textarea id="rawBulletinInput" rows="11" placeholder="الصق النشرة الخام الكاملة هنا لتفكيكها إلى فقرات شريط إخباري وفق قواعد الشريط المعتمدة لديك!" onpaste="clearPreviousTickerIfAny()" oninput="updateBulletinStats(); runTickerRadar();"></textarea>
             <div style="display:flex; justify-content:space-between; margin-top:5px;" class="muted-note">
               <span id="bulletinStats">0 كلمة | 0 حرف</span>
               <span>جاهز لاستقبال قواعد الشريط الإخباري الخاصة بك أيضاً!</span>
@@ -338,62 +339,58 @@
         <div>
           <div class="card" style="border-top: 4px solid var(--ticker);">
             <div class="card-header">
-              <h2 class="card-title">🎞️ الشريط الإخباري المستخرج</h2>
+              <h2 class="card-title">📄 نص الشريط الإخباري الجاهز للنسخ</h2>
               <div style="display:flex; gap:5px; flex-wrap:wrap;">
+                <button class="btn btn-ticker btn-sm" onclick="copyFormattedTicker()">📋 نسخ نص الشريط</button>
                 <button class="btn btn-accent btn-sm" onclick="pasteAndAuditOutput('tickerOutput')">📥 لصق النتيجة + فحص</button>
                 <button class="btn btn-ok btn-sm" onclick="autoFixArabicErrors('tickerOutput')">✨ تصحيح المصطلحات</button>
-                <button class="btn btn-ticker btn-sm" onclick="copyFormattedTicker()">📋 نسخ الشريط</button>
-                <button class="btn btn-outline btn-sm" onclick="downloadTickerTxt()">⬇️ ملف .txt للبث</button>
+                <button class="btn btn-outline btn-sm" onclick="downloadTickerTxt()">⬇️ ملف .txt</button>
               </div>
             </div>
 
             <div id="tickerStatusBar" class="status-bar"><span id="tickerStatusText"></span></div>
 
-            <textarea id="tickerOutput" rows="11" placeholder="فقرات الشريط الإخباري المفككة ستظهر هنا..." oninput="runTickerRadar()"></textarea>
+            <textarea id="tickerOutput" rows="15" placeholder="نص الشريط الإخباري يظهر هنا كنص خالص جاهز للنسخ أو التعديل اليدوي..." oninput="runTickerRadar()"></textarea>
 
-            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-top:7px;">
-              <span id="tickerStats" class="muted-note">0 فقرة شريط | 0 كلمة إجمالاً</span>
-              <button class="btn btn-warn btn-sm" onclick="saveCurrentTickerAsExample()">⭐ حفظ (النشرة + الشريط) في أمثلتي</button>
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-top:9px;">
+              <span id="tickerStats" class="muted-note">0 فقرة شريط | 0 كلمة صافية</span>
+              <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                <button class="btn btn-ok btn-sm" onclick="saveManualEditsForLearning('ticker')" title="إذا عدّلت أي فقرة يدوياً في مربع الشريط أعلاه، اضغط هنا ليحفظ النموذج تعديلاتك ويتعلم منها في الأشرطة القادمة!">
+                  🧠 حفظ تعديلاتي اليدوية ليتعلم منها النموذج لاحقاً
+                </button>
+                <button class="btn btn-ticker btn-sm" onclick="copyFormattedTicker()">📋 نسخ الشريط</button>
+              </div>
             </div>
 
             <!-- Post-Edit Ticker Revision Note + Save as Ticker Rule -->
             <div class="radar-box" style="margin-top:11px; border: 1.5px solid var(--ticker);">
               <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:7px;">
-                <strong style="font-size:0.9rem; color:var(--ticker);">✏️ ملاحظة لتعديل الشريط المستخرج + إضافتها كقاعدة شريط</strong>
+                <strong style="font-size:0.9rem; color:var(--ticker);">✏️ ملاحظة لتعديل الشريط + حفظها كقاعدة دائمة</strong>
                 <select id="tickerRevisionCategory" style="width:auto; padding:4px 8px; font-size:0.78rem;">
                   <option value="صياغة الشريط">تصنيف القاعدة: صياغة الشريط</option>
                   <option value="مصطلحات ثابتة">تصنيف القاعدة: مصطلحات ثابتة</option>
                 </select>
               </div>
-              <textarea id="tickerRevisionNote" rows="2" placeholder="اكتب ملاحظتك لتعديل فقرات الشريط أعلاه واعتمادها كقاعدة شريط دائمة..."></textarea>
+              <textarea id="tickerRevisionNote" rows="2" placeholder="اكتب ملاحظتك لتعديل الشريط أعلاه وحفظها كقاعدة شريط دائمة..."></textarea>
               <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">
                 <button class="btn btn-ticker btn-sm" id="applyTickerRevAndRuleBtn" style="flex:1; min-width:210px;" onclick="applyRevisionNote('ticker', true)">
-                  🔄➕ عدّل الشريط + أضفها كقاعدة دائمة
+                  🔄➕ عدّل الشريط + احفظ الملاحظة كقاعدة
                 </button>
                 <button class="btn btn-outline btn-sm" id="applyTickerRevOnlyBtn" onclick="applyRevisionNote('ticker', false)">
                   🔄 عدّل هذا الشريط فقط
                 </button>
                 <button class="btn btn-ok btn-sm" onclick="saveRevisionNoteAsRuleOnly('ticker')">
-                  ➕ احفظها كقاعدة فقط
+                  ➕ احفظ الملاحظة كقاعدة فقط
                 </button>
               </div>
             </div>
 
-            <div class="tv-ticker-wrap">
-              <div class="tv-ticker-badge">الشريط الإخباري</div>
-              <div class="tv-ticker-track" id="liveTvCrawlPreview">معاينة فقرات الشريط على الشاشة...</div>
-            </div>
-
             <div class="radar-box">
               <div style="display:flex; justify-content:space-between; align-items:center;">
-                <strong style="font-size:0.88rem;">🛡️ فاحص فقرات الشريط (الطول + الاستقلالية + المصطلحات + الإملاء)</strong>
+                <strong style="font-size:0.86rem;">🛡️ فحص سريع للمصطلحات والطول</strong>
                 <span id="tickerRadarBadge" class="chip chip-ok">بانتظار الشريط</span>
               </div>
               <div class="chip-list" id="tickerAlertsChips"></div>
-              <div style="margin-top:9px;">
-                <div class="muted-note">📏 <strong>عداد الكلمات لكل فقرة على حدة:</strong></div>
-                <div class="ticker-item-preview" id="tickerLinesInspector"></div>
-              </div>
             </div>
           </div>
         </div>
@@ -572,6 +569,6 @@
   </div>
 
   <div id="toast" class="toast"></div>
-  <script src="assets/app.js?v=14"></script>
+  <script src="assets/app.js?v=15"></script>
 </body>
 </html>
