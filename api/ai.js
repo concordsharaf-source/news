@@ -1,4 +1,4 @@
-// Vercel Serverless Function (60s timeout + fast low-thinking Gemini 3.8 + CORS-clean key query)
+// Vercel Serverless Function — Supports Groq (OpenAI GPT-OSS 120B), Mistral, Cohere Command-A, OpenRouter Free & Gemini
 module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -13,28 +13,60 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ error: "بيانات الطلب غير مكتملة" });
     }
 
-    if (engine === "github") {
-      const key = apiKey || process.env.GITHUB_MODELS_TOKEN || process.env.GITHUB_TOKEN;
-      if (!key) return res.status(400).json({ error: "يرجى وضع توكن GitHub Models المجاني (بصلاحية Models: Read-only)" });
+    if (engine === "groq") {
+      const key = apiKey || process.env.GROQ_API_KEY;
+      if (!key) return res.status(400).json({ error: "مفتاح Groq المجاني غير موجود" });
 
-      const upstream = await fetch("https://models.github.ai/inference/chat/completions", {
+      const upstream = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
-        headers: {
-          "Accept": "application/vnd.github+json",
-          "Authorization": `Bearer ${key}`,
-          "X-GitHub-Api-Version": "2022-11-28",
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model,
-          messages: [{ role: "user", content: prompt }],
-          temperature: 0.1
-        })
+        headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model, messages: [{ role: "user", content: prompt }], temperature: 0.1 })
       });
       const data = await upstream.json();
-      if (!upstream.ok) {
-        return res.status(upstream.status).json({ error: data?.error?.message || data?.message || "خطأ من GitHub Models API (تأكد من تفعيل صلاحية Models: Read-only في التوكن)" });
-      }
+      if (!upstream.ok) return res.status(upstream.status).json({ error: data?.error?.message || "خطأ من Groq API" });
+      return res.status(200).json({ text: (data?.choices?.[0]?.message?.content || "").trim() });
+    }
+
+    if (engine === "mistral") {
+      const key = apiKey || process.env.MISTRAL_API_KEY;
+      if (!key) return res.status(400).json({ error: "مفتاح Mistral المجاني غير موجود" });
+
+      const upstream = await fetch("https://api.mistral.ai/v1/chat/completions", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model, messages: [{ role: "user", content: prompt }], temperature: 0.1 })
+      });
+      const data = await upstream.json();
+      if (!upstream.ok) return res.status(upstream.status).json({ error: data?.message || data?.error?.message || "خطأ من Mistral API" });
+      return res.status(200).json({ text: (data?.choices?.[0]?.message?.content || "").trim() });
+    }
+
+    if (engine === "cohere") {
+      const key = apiKey || process.env.COHERE_API_KEY;
+      if (!key) return res.status(400).json({ error: "مفتاح Cohere المجاني غير موجود" });
+
+      const upstream = await fetch("https://api.cohere.com/v2/chat", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model, messages: [{ role: "user", content: prompt }], temperature: 0.1 })
+      });
+      const data = await upstream.json();
+      if (!upstream.ok) return res.status(upstream.status).json({ error: data?.message || "خطأ من Cohere API" });
+      const text = (data?.message?.content?.map(c => c.text || "").join("") || "").trim();
+      return res.status(200).json({ text });
+    }
+
+    if (engine === "openrouter") {
+      const key = apiKey || process.env.OPENROUTER_API_KEY;
+      if (!key) return res.status(400).json({ error: "مفتاح OpenRouter المجاني غير موجود" });
+
+      const upstream = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model, messages: [{ role: "user", content: prompt }], temperature: 0.1 })
+      });
+      const data = await upstream.json();
+      if (!upstream.ok) return res.status(upstream.status).json({ error: data?.error?.message || "خطأ من OpenRouter API" });
       return res.status(200).json({ text: (data?.choices?.[0]?.message?.content || "").trim() });
     }
 
@@ -51,71 +83,31 @@ module.exports = async function handler(req, res) {
         const upstream = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: genConfig
-          })
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: genConfig })
         });
         const data = await upstream.json();
         return { ok: upstream.ok, status: upstream.status, data };
       }
 
       let attempt = await callGeminiModel(model, true);
-
-      // If thinkingConfig wasn't accepted on a variant, retry cleanly without thinkingConfig
       if (!attempt.ok && (attempt.data?.error?.message || "").toLowerCase().includes("thinking")) {
         attempt = await callGeminiModel(model, false);
       }
-
-      // Auto-heal if Google suggests a replacement model
       if (!attempt.ok) {
         const errMsg = attempt.data?.error?.message || "";
         const suggestedMatch = errMsg.match(/models\/(gemini-[a-zA-Z0-9.-]+)/);
         if (suggestedMatch && suggestedMatch[1] && suggestedMatch[1] !== model) {
           attempt = await callGeminiModel(suggestedMatch[1], true);
-        } else if (errMsg.includes("no longer available") && model !== "gemini-3.5-flash-lite") {
-          attempt = await callGeminiModel("gemini-3.5-flash-lite", false);
         }
       }
-
-      if (!attempt.ok) {
-        return res.status(attempt.status).json({ error: attempt.data?.error?.message || "خطأ من Gemini API" });
-      }
+      if (!attempt.ok) return res.status(attempt.status).json({ error: attempt.data?.error?.message || "خطأ من Gemini API" });
 
       const parts = attempt.data?.candidates?.[0]?.content?.parts || [];
       const text = parts.filter(p => !p.thought).map(p => p.text || "").join("").trim();
       return res.status(200).json({ text });
     }
 
-    if (engine === "groq") {
-      const key = apiKey || process.env.GROQ_API_KEY;
-      if (!key) return res.status(400).json({ error: "مفتاح Groq غير موجود" });
-
-      const upstream = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ model, messages: [{ role: "user", content: prompt }], temperature: 0.1 })
-      });
-      const data = await upstream.json();
-      if (!upstream.ok) return res.status(upstream.status).json({ error: data?.error?.message || "خطأ من Groq API" });
-      return res.status(200).json({ text: (data?.choices?.[0]?.message?.content || "").trim() });
-    }
-
-    if (engine === "openrouter") {
-      const key = apiKey || process.env.OPENROUTER_API_KEY;
-      if (!key) return res.status(400).json({ error: "مفتاح OpenRouter غير موجود" });
-
-      const upstream = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ model, messages: [{ role: "user", content: prompt }], temperature: 0.1 })
-      });
-      const data = await upstream.json();
-      if (!upstream.ok) return res.status(upstream.status).json({ error: data?.error?.message || "خطأ من OpenRouter API" });
-      return res.status(200).json({ text: (data?.choices?.[0]?.message?.content || "").trim() });
-    }
-
-    return res.status(400).json({ error: "محرك غير مدعوم عبر الخادم" });
+    return res.status(400).json({ error: "محرك غير مدعوم" });
   } catch (err) {
     return res.status(500).json({ error: err.message || "خطأ داخلي في الخادم الوسيط" });
   }

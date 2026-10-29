@@ -23,40 +23,42 @@ const SafeStorage = {
 };
 
 const ENGINES = {
-  github: {
-    label: "🟢 OpenAI GPT عبر GitHub Models (مجاني بحساب جيت هوب ✅)",
+  groq: {
+    label: "⚡ Groq المجاني (يضم OpenAI GPT-120B و Qwen عبر جسر Vercel ✅)",
     models: [
-      { id: "openai/gpt-4.1", name: "GPT-4.1 (احترافي جداً في التحرير الإخباري والالتزام بالقواعد)" },
-      { id: "openai/gpt-4o", name: "GPT-4o (صياغة عربية رصينة وممتازة)" },
-      { id: "openai/gpt-4.1-mini", name: "GPT-4.1 Mini (سريع وبحصة مجانية أكبر)" },
-      { id: "openai/gpt-5", name: "GPT-5 (أحدث جيل من OpenAI)" },
-      { id: "deepseek/DeepSeek-V3-0324", name: "DeepSeek V3 (قوي جداً بالعربية)" },
-      { id: "xai/grok-3", name: "Grok 3 (مجاناً عبر GitHub)" }
+      { id: "openai/gpt-oss-120b", name: "OpenAI GPT-OSS 120B (نموذج OpenAI الضخم - مجاني وسريع جداً)" },
+      { id: "qwen/qwen3.8-27b", name: "Qwen 3.8 27B (قوي جداً في الصياغة العربية)" },
+      { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B Versatile" }
+    ]
+  },
+  mistral: {
+    label: "🟠 Mistral المجاني (صياغة صحفية عربية رصينة بدون بطاقة ✅)",
+    models: [
+      { id: "mistral-large-latest", name: "Mistral Large (احترافي ودقيق جداً في العربية)" },
+      { id: "mistral-saba-latest", name: "Mistral Saba (مخصص للغة العربية والشرق الأوسط)" }
+    ]
+  },
+  cohere: {
+    label: "🔷 Cohere المجاني (Command-A البارع بالفصحى الصحفية ✅)",
+    models: [
+      { id: "command-a-03-2025", name: "Command A (من أقوى النماذج عالمياً في التحرير العربي)" },
+      { id: "command-r-plus-08-2024", name: "Command R+" }
+    ]
+  },
+  openrouter: {
+    label: "🔀 OpenRouter المجاني (Nemotron 550B و Gemma 4 ✅)",
+    models: [
+      { id: "nvidia/nemotron-3-ultra-550b-a55b:free", name: "Nemotron 3 Ultra 550B (ضخم ومجاني)" },
+      { id: "google/gemma-4-31b-it:free", name: "Gemma 4 31B (مجاني)" },
+      { id: "openrouter/free", name: "الموجّه التلقائي لأفضل نموذج مجاني متاح" }
     ]
   },
   gemini: {
     label: "🟣 Google Gemini المجاني (يعمل باليمن بدون VPN ✅)",
     models: [
-      { id: "gemini-3.8-flash", name: "Gemini 3.8 Flash (الأحدث والأدق للتحرير - مجاني)" },
-      { id: "gemini-3.5-flash-lite", name: "Gemini 3.5 Flash-Lite (سريع جداً وحصة مجانية كبيرة)" },
-      { id: "gemini-3.6-flash", name: "Gemini 3.6 Flash (مجاني)" },
-      { id: "gemini-3.1-pro-preview", name: "Gemini 3.1 Pro (للتحليل والنشرات الضخمة)" }
-    ]
-  },
-  groq: {
-    label: "⚡ Groq السريع المجاني (عبر جسر Vercel لليمن ✅)",
-    models: [
-      { id: "openai/gpt-oss-120b", name: "GPT-OSS 120B" },
-      { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B Versatile" },
-      { id: "llama-3.1-8b-instant", name: "Llama 3.1 8B Instant" }
-    ]
-  },
-  openrouter: {
-    label: "🔀 OpenRouter المجاني (عبر جسر Vercel ✅)",
-    models: [
-      { id: "openrouter/free", name: "الموجّه التلقائي لأفضل نموذج مجاني متاح" },
-      { id: "deepseek/deepseek-r1:free", name: "DeepSeek R1 (مجاني)" },
-      { id: "meta-llama/llama-3.3-70b-instruct:free", name: "Llama 3.3 70B (مجاني)" }
+      { id: "gemini-3.8-flash", name: "Gemini 3.8 Flash" },
+      { id: "gemini-3.5-flash-lite", name: "Gemini 3.5 Flash-Lite" },
+      { id: "gemini-3.1-pro-preview", name: "Gemini 3.1 Pro" }
     ]
   }
 };
@@ -87,7 +89,7 @@ let state = {
   dictionary: [],
   localNewsExamples: SafeStorage.get("nr_local_news_ex", []),
   localTickerExamples: SafeStorage.get("nr_local_ticker_ex", []),
-  keys: SafeStorage.get("nr_keys_v1", { github_models: "", gemini: "", groq: "", openrouter: "", github: "" }),
+  keys: SafeStorage.get("nr_keys_v1", { groq: "", mistral: "", cohere: "", openrouter: "", gemini: "", github: "" }),
   selectedFormat: "lvo_standard",
   ruleSubTab: "news",
   exSubTab: "news",
@@ -118,8 +120,8 @@ async function init() {
     document.documentElement.setAttribute("data-theme", "dark");
     document.getElementById("themeBtn").textContent = "☀️ نهاري";
   }
-  const ghModelsEl = document.getElementById("githubModelsKeyInput");
-  if (ghModelsEl) ghModelsEl.value = state.keys.github_models || "";
+  if (document.getElementById("mistralKeyInput")) document.getElementById("mistralKeyInput").value = state.keys.mistral || "";
+  if (document.getElementById("cohereKeyInput")) document.getElementById("cohereKeyInput").value = state.keys.cohere || "";
   document.getElementById("geminiKeyInput").value = state.keys.gemini || "";
   document.getElementById("groqKeyInput").value = state.keys.groq || "";
   document.getElementById("openrouterKeyInput").value = state.keys.openrouter || "";
@@ -161,34 +163,45 @@ function populateEngineSelectors() {
     pSel.innerHTML += `<option value="${k}">${v.label}</option>`;
     sSel.innerHTML += `<option value="${k}">${v.label}</option>`;
   }
-  if (state.keys.github_models) pSel.value = "github";
-  else if (state.keys.gemini) pSel.value = "gemini";
-  else if (state.keys.groq) pSel.value = "groq";
+  if (state.keys.groq) pSel.value = "groq";
+  else if (state.keys.mistral) pSel.value = "mistral";
+  else if (state.keys.cohere) pSel.value = "cohere";
   else if (state.keys.openrouter) pSel.value = "openrouter";
-  else pSel.value = "github";
+  else if (state.keys.gemini) pSel.value = "gemini";
+  else pSel.value = "groq";
 
-  sSel.value = state.keys.gemini ? "gemini" : "github";
+  sSel.value = state.keys.mistral ? "mistral" : (state.keys.gemini ? "gemini" : "openrouter");
   updateModelDropdown("primary");
   updateModelDropdown("secondary");
 
   const banner = document.getElementById("missingKeyBanner");
   if (banner) {
-    const hasAnyKey = !!(state.keys.github_models || state.keys.gemini || state.keys.groq || state.keys.openrouter);
+    const hasAnyKey = !!(state.keys.groq || state.keys.mistral || state.keys.cohere || state.keys.openrouter || state.keys.gemini);
     banner.style.display = hasAnyKey ? "none" : "block";
   }
 }
 
 function saveQuickGeminiKey() {
   const val = (document.getElementById("quickGeminiKeyInput")?.value || "").trim();
-  if (!val) { showToast("⚠️ الصق التوكن أو المفتاح أولاً"); return; }
-  if (val.startsWith("github_pat_") || val.startsWith("ghp_")) {
-    const el = document.getElementById("githubModelsKeyInput");
-    if (el) el.value = val;
-  } else {
-    document.getElementById("geminiKeyInput").value = val;
-  }
+  if (!val) { showToast("⚠️ الصق المفتاح أولاً"); return; }
+  if (val.startsWith("gsk_")) document.getElementById("groqKeyInput").value = val;
+  else if (val.startsWith("sk-or-")) document.getElementById("openrouterKeyInput").value = val;
+  else if (val.startsWith("AIza")) document.getElementById("geminiKeyInput").value = val;
+  else if (document.getElementById("mistralKeyInput")) document.getElementById("mistralKeyInput").value = val;
   saveApiKeys();
   showToast("✅ تم حفظ المفتاح بنجاح! يمكنك التحرير الآن فوراً");
+}
+
+async function pasteAndAuditOutput(targetId) {
+  try {
+    const t = await navigator.clipboard.readText();
+    if (!t || !t.trim()) { showToast("⚠️ الحافظة فارغة"); return; }
+    document.getElementById(targetId).value = t.trim();
+    autoFixArabicErrors(targetId);
+    showToast("✅ تم لصق نتيجة Arena / Claude وتصحيح المصطلحات وفحصها بالرادار فوراً!");
+  } catch (e) {
+    showToast("اضغط داخل مربع المخرجات واستخدم Ctrl+V للصق ثم اضغط «✨ تصحيح»");
+  }
 }
 
 function updateModelDropdown(which) {
@@ -358,8 +371,7 @@ function extractPuterText(res) {
 }
 
 async function callModel(engine, model, promptText) {
-  const keyField = engine === "github" ? "github_models" : engine;
-  const apiKey = (state.keys[keyField] || "").trim();
+  const apiKey = (state.keys[engine] || "").trim();
 
   // Try Vercel Serverless Bridge (/api/ai) first
   try {
@@ -381,23 +393,7 @@ async function callModel(engine, model, promptText) {
   }
 
   if (!apiKey) {
-    throw new Error(`يرجى لصق مفتاح ${engine === 'github' ? 'GitHub Models (لتشغيل GPT مجاناً)' : engine.toUpperCase()} أولاً في تبويب «⚡ الربط والمزامنة».`);
-  }
-
-  if (engine === "github") {
-    const r = await fetch("https://models.github.ai/inference/chat/completions", {
-      method: "POST",
-      headers: {
-        "Accept": "application/vnd.github+json",
-        "Authorization": `Bearer ${apiKey}`,
-        "X-GitHub-Api-Version": "2022-11-28",
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ model, messages: [{ role: "user", content: promptText }], temperature: 0.1 })
-    });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d?.error?.message || d?.message || "خطأ من GitHub Models");
-    return (d?.choices?.[0]?.message?.content || "").trim();
+    throw new Error(`يرجى لصق مفتاح ${engine.toUpperCase()} المجاني أولاً في تبويب «⚡ الربط والمزامنة»، أو اضغط زر «🏆 نسخ + فتح Arena.ai» لاستخدام Claude و GPT مجاناً.`);
   }
 
   if (engine === "gemini") {
@@ -429,14 +425,31 @@ async function callModel(engine, model, promptText) {
     return parts.filter(p => !p.thought).map(p => p.text || "").join("").trim();
   }
 
-  const endpoint = engine === "groq" ? "https://api.groq.com/openai/v1/chat/completions" : "https://openrouter.ai/api/v1/chat/completions";
+  if (engine === "cohere") {
+    const r = await fetch("https://api.cohere.com/v2/chat", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model, messages: [{ role: "user", content: promptText }], temperature: 0.1 })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d?.message || "تعذر الاتصال بـ Cohere");
+    const blocks = d?.message?.content || [];
+    return (Array.isArray(blocks) ? blocks.map(b => b.text || "").join("") : "").trim();
+  }
+
+  const endpointMap = {
+    groq: "https://api.groq.com/openai/v1/chat/completions",
+    mistral: "https://api.mistral.ai/v1/chat/completions",
+    openrouter: "https://openrouter.ai/api/v1/chat/completions"
+  };
+  const endpoint = endpointMap[engine] || endpointMap.openrouter;
   const r = await fetch(endpoint, {
     method: "POST",
     headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({ model, messages: [{ role: "user", content: promptText }], temperature: 0.1 })
   });
   const d = await r.json();
-  if (!r.ok) throw new Error(d?.error?.message || "تعذر الاتصال بالمحرك");
+  if (!r.ok) throw new Error(d?.error?.message || d?.message || "تعذر الاتصال بالمحرك");
   return (d?.choices?.[0]?.message?.content || "").trim();
 }
 
@@ -1163,10 +1176,11 @@ function adoptComparison(which) {
 }
 function saveApiKeys() {
   state.keys = {
-    github_models: (document.getElementById("githubModelsKeyInput")?.value || "").trim(),
-    gemini: document.getElementById("geminiKeyInput").value.trim(),
     groq: document.getElementById("groqKeyInput").value.trim(),
+    mistral: (document.getElementById("mistralKeyInput")?.value || "").trim(),
+    cohere: (document.getElementById("cohereKeyInput")?.value || "").trim(),
     openrouter: document.getElementById("openrouterKeyInput").value.trim(),
+    gemini: document.getElementById("geminiKeyInput").value.trim(),
     github: document.getElementById("githubTokenInput").value.trim()
   };
   SafeStorage.set("nr_keys_v1", state.keys); populateEngineSelectors();
@@ -1231,14 +1245,14 @@ function setupPwaFeatures() {
   // Purge any old v1-v4 PWA caches automatically so updates apply immediately!
   if ("caches" in window) {
     caches.keys().then(keys => {
-      keys.filter(k => k !== "mihbarah-pwa-v7").forEach(k => caches.delete(k));
+      keys.filter(k => k !== "mihbarah-pwa-v8").forEach(k => caches.delete(k));
     }).catch(() => {});
   }
 
   // 1. Register Service Worker
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js?v=7").then(reg => {
+      navigator.serviceWorker.register("sw.js?v=8").then(reg => {
         reg.update().catch(() => {});
       }).catch(() => {});
     });
