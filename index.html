@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="assets/style.css?v=6" />
+  <link rel="stylesheet" href="assets/style.css?v=7" />
 </head>
 <body>
   <header class="topbar">
@@ -97,9 +97,9 @@
 
             <div class="radar-box" style="margin-bottom:12px;">
               <div id="missingKeyBanner" style="display:none; background:var(--warn-soft); color:var(--warn); border:1px solid var(--warn); border-radius:9px; padding:9px 11px; margin-bottom:10px; font-size:0.82rem;">
-                🔑 <strong>ملاحظة:</strong> عند فتح التطبيق المثبّت (PWA) لأول مرة تكون ذاكرته مستقلة عن المتصفح؛ الصق مفتاح Gemini المجاني هنا مرة واحدة ليُحفظ دائماً:
+                🔑 <strong>لتشغيل GPT-4.1 و GPT-5 مجاناً داخل الصفحة:</strong> الصق توكن GitHub (بصلاحية Models: Read-only) أو مفتاح Gemini هنا مرة واحدة:
                 <div style="display:flex; gap:6px; margin-top:6px;">
-                  <input type="password" id="quickGeminiKeyInput" placeholder="الصق مفتاح Gemini المجاني (AIza...)" style="padding:6px 10px; font-size:0.84rem;" />
+                  <input type="password" id="quickGeminiKeyInput" placeholder="github_pat_... أو AIza..." style="padding:6px 10px; font-size:0.84rem;" />
                   <button class="btn btn-primary btn-sm" onclick="saveQuickGeminiKey()">حفظ المفتاح</button>
                 </div>
               </div>
@@ -145,9 +145,9 @@
             <div style="margin-top:11px; padding-top:10px; border-top:1px solid var(--border);">
               <div class="muted-note">🌐 <strong>أو انسخ الأمر المحكم لحساباتك المجانية (تعمل في اليمن بدون VPN ✅):</strong></div>
               <div class="web-launchers">
-                <button class="btn btn-outline btn-sm" onclick="copyAndOpenWeb('news', 'https://gemini.google.com/app', 'Gemini')">🟣 Gemini ✅</button>
-                <button class="btn btn-outline btn-sm" onclick="copyAndOpenWeb('news', 'https://chat.deepseek.com/', 'DeepSeek')">🔵 DeepSeek ✅</button>
+                <button class="btn btn-primary btn-sm" onclick="copyAndOpenWeb('news', 'https://arena.ai/?mode=direct', 'Arena.ai (اختر Claude أو GPT)')">🏆 نسخ + فتح Arena.ai (Claude & GPT) ✅</button>
                 <button class="btn btn-outline btn-sm" onclick="copyAndOpenWeb('news', 'https://chatgpt.com/', 'ChatGPT')">🟢 ChatGPT ✅</button>
+                <button class="btn btn-outline btn-sm" onclick="copyAndOpenWeb('news', 'https://chat.deepseek.com/', 'DeepSeek')">🔵 DeepSeek ✅</button>
                 <button class="btn btn-outline btn-sm" onclick="copyAndOpenWeb('news', 'https://chat.qwen.ai/', 'Qwen')">🔷 Qwen ✅</button>
                 <button class="btn btn-outline btn-sm" onclick="previewPromptModal('news')">👁️ معاينة الأمر</button>
               </div>
@@ -284,9 +284,9 @@
             <div style="margin-top:11px; padding-top:10px; border-top:1px solid var(--border);">
               <div class="muted-note">🌐 <strong>أو انسخ أمر تفكيك النشرة لحسابك المجاني (متوافق مع اليمن ✅):</strong></div>
               <div class="web-launchers">
-                <button class="btn btn-outline btn-sm" onclick="copyAndOpenWeb('ticker', 'https://gemini.google.com/app', 'Gemini')">🟣 Gemini ✅</button>
-                <button class="btn btn-outline btn-sm" onclick="copyAndOpenWeb('ticker', 'https://chat.deepseek.com/', 'DeepSeek')">🔵 DeepSeek ✅</button>
+                <button class="btn btn-ticker btn-sm" onclick="copyAndOpenWeb('ticker', 'https://arena.ai/?mode=direct', 'Arena.ai (اختر Claude أو GPT)')">🏆 نسخ + فتح Arena.ai (Claude & GPT) ✅</button>
                 <button class="btn btn-outline btn-sm" onclick="copyAndOpenWeb('ticker', 'https://chatgpt.com/', 'ChatGPT')">🟢 ChatGPT ✅</button>
+                <button class="btn btn-outline btn-sm" onclick="copyAndOpenWeb('ticker', 'https://chat.deepseek.com/', 'DeepSeek')">🔵 DeepSeek ✅</button>
                 <button class="btn btn-outline btn-sm" onclick="copyAndOpenWeb('ticker', 'https://chat.qwen.ai/', 'Qwen')">🔷 Qwen ✅</button>
                 <button class="btn btn-outline btn-sm" onclick="previewPromptModal('ticker')">👁️ معاينة أمر الشريط</button>
               </div>
@@ -457,9 +457,18 @@
         </p>
 
         <div class="grid-2">
-          <div class="radar-box" style="margin-top:0; border-color: var(--ok);">
-            <h3 style="margin:0 0 6px; font-size:0.96rem; color: var(--ok);">1️⃣ مفتاح Google Gemini المجاني (1,500 طلب/يوم بحساب Gmail فقط ✅)</h3>
-            <p class="muted-note">يعمل رسمياً في اليمن بدون VPN: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:var(--primary); font-weight:bold;">aistudio.google.com/apikey</a></p>
+          <div class="radar-box" style="margin-top:0; border: 2px solid var(--ok);">
+            <h3 style="margin:0 0 6px; font-size:0.96rem; color: var(--ok);">🌟 رقم 1 (للتحرير المهني): نماذج OpenAI GPT-4.1 و GPT-5 مجاناً عبر حسابك في GitHub!</h3>
+            <p class="muted-note">
+              يعطيك حسابك المجاني في GitHub وصولاً مجانياً رسمياً لنماذج <strong>GPT-4.1 و GPT-4o و GPT-5 و DeepSeek-V3 و Grok-3</strong> بدون بطاقة بنكية!
+              <br/>فقط افتح <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener" style="color:var(--primary); font-weight:bold;">إنشاء Fine-grained Token في GitHub</a> ⬅ انزل لقسم <strong>Permissions ➔ Account permissions ➔ Models</strong> واجعلها <strong>Read-only</strong> ثم انسخ التوكن والصقه هنا:
+            </p>
+            <input type="password" id="githubModelsKeyInput" placeholder="github_pat_..." oninput="saveApiKeys()" />
+          </div>
+
+          <div class="radar-box" style="margin-top:0;">
+            <h3 style="margin:0 0 6px; font-size:0.96rem;">2️⃣ مفتاح Google Gemini المجاني (1,500 طلب/يوم بحساب Gmail)</h3>
+            <p class="muted-note">يعمل في اليمن بدون VPN: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:var(--primary); font-weight:bold;">aistudio.google.com/apikey</a></p>
             <input type="password" id="geminiKeyInput" placeholder="AIza..." oninput="saveApiKeys()" />
           </div>
 
@@ -498,6 +507,6 @@
   </div>
 
   <div id="toast" class="toast"></div>
-  <script src="assets/app.js?v=6"></script>
+  <script src="assets/app.js?v=7"></script>
 </body>
 </html>

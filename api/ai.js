@@ -13,6 +13,31 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ error: "بيانات الطلب غير مكتملة" });
     }
 
+    if (engine === "github") {
+      const key = apiKey || process.env.GITHUB_MODELS_TOKEN || process.env.GITHUB_TOKEN;
+      if (!key) return res.status(400).json({ error: "يرجى وضع توكن GitHub Models المجاني (بصلاحية Models: Read-only)" });
+
+      const upstream = await fetch("https://models.github.ai/inference/chat/completions", {
+        method: "POST",
+        headers: {
+          "Accept": "application/vnd.github+json",
+          "Authorization": `Bearer ${key}`,
+          "X-GitHub-Api-Version": "2022-11-28",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.1
+        })
+      });
+      const data = await upstream.json();
+      if (!upstream.ok) {
+        return res.status(upstream.status).json({ error: data?.error?.message || data?.message || "خطأ من GitHub Models API (تأكد من تفعيل صلاحية Models: Read-only في التوكن)" });
+      }
+      return res.status(200).json({ text: (data?.choices?.[0]?.message?.content || "").trim() });
+    }
+
     if (engine === "gemini") {
       const key = apiKey || process.env.GEMINI_API_KEY;
       if (!key) return res.status(400).json({ error: "مفتاح Gemini غير موجود" });

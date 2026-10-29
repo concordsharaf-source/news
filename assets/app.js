@@ -23,6 +23,17 @@ const SafeStorage = {
 };
 
 const ENGINES = {
+  github: {
+    label: "🟢 OpenAI GPT عبر GitHub Models (مجاني بحساب جيت هوب ✅)",
+    models: [
+      { id: "openai/gpt-4.1", name: "GPT-4.1 (احترافي جداً في التحرير الإخباري والالتزام بالقواعد)" },
+      { id: "openai/gpt-4o", name: "GPT-4o (صياغة عربية رصينة وممتازة)" },
+      { id: "openai/gpt-4.1-mini", name: "GPT-4.1 Mini (سريع وبحصة مجانية أكبر)" },
+      { id: "openai/gpt-5", name: "GPT-5 (أحدث جيل من OpenAI)" },
+      { id: "deepseek/DeepSeek-V3-0324", name: "DeepSeek V3 (قوي جداً بالعربية)" },
+      { id: "xai/grok-3", name: "Grok 3 (مجاناً عبر GitHub)" }
+    ]
+  },
   gemini: {
     label: "🟣 Google Gemini المجاني (يعمل باليمن بدون VPN ✅)",
     models: [
@@ -76,7 +87,7 @@ let state = {
   dictionary: [],
   localNewsExamples: SafeStorage.get("nr_local_news_ex", []),
   localTickerExamples: SafeStorage.get("nr_local_ticker_ex", []),
-  keys: SafeStorage.get("nr_keys_v1", { gemini: "", groq: "", openrouter: "", github: "" }),
+  keys: SafeStorage.get("nr_keys_v1", { github_models: "", gemini: "", groq: "", openrouter: "", github: "" }),
   selectedFormat: "lvo_standard",
   ruleSubTab: "news",
   exSubTab: "news",
@@ -107,6 +118,8 @@ async function init() {
     document.documentElement.setAttribute("data-theme", "dark");
     document.getElementById("themeBtn").textContent = "☀️ نهاري";
   }
+  const ghModelsEl = document.getElementById("githubModelsKeyInput");
+  if (ghModelsEl) ghModelsEl.value = state.keys.github_models || "";
   document.getElementById("geminiKeyInput").value = state.keys.gemini || "";
   document.getElementById("groqKeyInput").value = state.keys.groq || "";
   document.getElementById("openrouterKeyInput").value = state.keys.openrouter || "";
@@ -148,28 +161,34 @@ function populateEngineSelectors() {
     pSel.innerHTML += `<option value="${k}">${v.label}</option>`;
     sSel.innerHTML += `<option value="${k}">${v.label}</option>`;
   }
-  if (state.keys.gemini) pSel.value = "gemini";
+  if (state.keys.github_models) pSel.value = "github";
+  else if (state.keys.gemini) pSel.value = "gemini";
   else if (state.keys.groq) pSel.value = "groq";
   else if (state.keys.openrouter) pSel.value = "openrouter";
-  else pSel.value = "gemini"; // Always default to free Google Gemini, never Puter!
+  else pSel.value = "github";
 
-  sSel.value = state.keys.groq ? "groq" : "gemini";
+  sSel.value = state.keys.gemini ? "gemini" : "github";
   updateModelDropdown("primary");
   updateModelDropdown("secondary");
 
   const banner = document.getElementById("missingKeyBanner");
   if (banner) {
-    const hasAnyKey = !!(state.keys.gemini || state.keys.groq || state.keys.openrouter);
+    const hasAnyKey = !!(state.keys.github_models || state.keys.gemini || state.keys.groq || state.keys.openrouter);
     banner.style.display = hasAnyKey ? "none" : "block";
   }
 }
 
 function saveQuickGeminiKey() {
   const val = (document.getElementById("quickGeminiKeyInput")?.value || "").trim();
-  if (!val) { showToast("⚠️ الصق المفتاح أولاً"); return; }
-  document.getElementById("geminiKeyInput").value = val;
+  if (!val) { showToast("⚠️ الصق التوكن أو المفتاح أولاً"); return; }
+  if (val.startsWith("github_pat_") || val.startsWith("ghp_")) {
+    const el = document.getElementById("githubModelsKeyInput");
+    if (el) el.value = val;
+  } else {
+    document.getElementById("geminiKeyInput").value = val;
+  }
   saveApiKeys();
-  showToast("✅ تم حفظ مفتاح Gemini بنجاح! يمكنك التحرير الآن فوراً");
+  showToast("✅ تم حفظ المفتاح بنجاح! يمكنك التحرير الآن فوراً");
 }
 
 function updateModelDropdown(which) {
@@ -339,9 +358,10 @@ function extractPuterText(res) {
 }
 
 async function callModel(engine, model, promptText) {
-  const apiKey = (state.keys[engine] || "").trim();
+  const keyField = engine === "github" ? "github_models" : engine;
+  const apiKey = (state.keys[keyField] || "").trim();
 
-  // Try Vercel Serverless Bridge (/api/ai) first — also supports GEMINI_API_KEY / GROQ_API_KEY stored in Vercel Environment Variables!
+  // Try Vercel Serverless Bridge (/api/ai) first
   try {
     const bridgeRes = await fetch("/api/ai", {
       method: "POST",
@@ -361,7 +381,23 @@ async function callModel(engine, model, promptText) {
   }
 
   if (!apiKey) {
-    throw new Error(`يرجى لصق مفتاح ${engine.toUpperCase()} المجاني أولاً في تبويب «⚡ الربط والمزامنة» (أو في المربع الأصفر أعلاه).`);
+    throw new Error(`يرجى لصق مفتاح ${engine === 'github' ? 'GitHub Models (لتشغيل GPT مجاناً)' : engine.toUpperCase()} أولاً في تبويب «⚡ الربط والمزامنة».`);
+  }
+
+  if (engine === "github") {
+    const r = await fetch("https://models.github.ai/inference/chat/completions", {
+      method: "POST",
+      headers: {
+        "Accept": "application/vnd.github+json",
+        "Authorization": `Bearer ${apiKey}`,
+        "X-GitHub-Api-Version": "2022-11-28",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ model, messages: [{ role: "user", content: promptText }], temperature: 0.1 })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d?.error?.message || d?.message || "خطأ من GitHub Models");
+    return (d?.choices?.[0]?.message?.content || "").trim();
   }
 
   if (engine === "gemini") {
@@ -1127,6 +1163,7 @@ function adoptComparison(which) {
 }
 function saveApiKeys() {
   state.keys = {
+    github_models: (document.getElementById("githubModelsKeyInput")?.value || "").trim(),
     gemini: document.getElementById("geminiKeyInput").value.trim(),
     groq: document.getElementById("groqKeyInput").value.trim(),
     openrouter: document.getElementById("openrouterKeyInput").value.trim(),
@@ -1194,14 +1231,14 @@ function setupPwaFeatures() {
   // Purge any old v1-v4 PWA caches automatically so updates apply immediately!
   if ("caches" in window) {
     caches.keys().then(keys => {
-      keys.filter(k => k !== "mihbarah-pwa-v6").forEach(k => caches.delete(k));
+      keys.filter(k => k !== "mihbarah-pwa-v7").forEach(k => caches.delete(k));
     }).catch(() => {});
   }
 
   // 1. Register Service Worker
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js?v=6").then(reg => {
+      navigator.serviceWorker.register("sw.js?v=7").then(reg => {
         reg.update().catch(() => {});
       }).catch(() => {});
     });
