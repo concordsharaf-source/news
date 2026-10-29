@@ -2,8 +2,16 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f766e" id="metaThemeColor" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="محبرة الأخبار" />
+  <meta name="description" content="منصة تحرير الأخبار وتفكيك النشرات إلى شريط إخباري وفق السياسة التحريرية المعتمدة" />
   <title>مِحْبَرَة الأخبار والشريط الإخباري</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   <link rel="stylesheet" href="assets/style.css" />
   <script src="https://js.puter.com/v2/" async></script>
 </head>
@@ -28,6 +36,8 @@
       </nav>
 
       <div class="top-actions">
+        <span id="netStatusBadge" class="chip chip-ok" style="font-size:0.74rem;">🟢 متصل</span>
+        <button class="icon-btn" id="installPwaBtn" onclick="installPwaApp()" style="background:var(--primary-soft); color:var(--primary); border-color:var(--primary); font-weight:800;">📲 تثبيت التطبيق</button>
         <button class="icon-btn" onclick="syncToGitHubRepo()" title="رفع أي قواعد أو مصطلحات جديدة أضفتها هنا مباشرة إلى مستودع GitHub لتتحدث على Vercel">☁️ حفظ في GitHub</button>
         <button class="icon-btn" onclick="exportBackup()">💾 تصدير JSON</button>
         <button class="icon-btn" onclick="document.getElementById('importFile').click()">📂 استيراد</button>

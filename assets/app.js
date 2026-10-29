@@ -92,7 +92,7 @@ let state = {
 
 async function fetchJsonSafe(path, fallback) {
   try {
-    const r = await fetch(path + "?v=" + Date.now());
+    const r = await fetch(path);
     if (!r.ok) return fallback;
     return await r.json();
   } catch (e) {
@@ -1164,4 +1164,80 @@ function escapeHtml(s) {
   return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+// =========================================================================
+// PWA Service Worker, Install Prompt, Shortcuts & Network Status
+// =========================================================================
+let deferredPwaPrompt = null;
+
+function setupPwaFeatures() {
+  // 1. Register Service Worker
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    });
+  }
+
+  // 2. Hide install button if already installed as standalone PWA
+  const isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+  const installBtn = document.getElementById("installPwaBtn");
+  if (isStandalone && installBtn) {
+    installBtn.style.display = "none";
+  }
+
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferredPwaPrompt = e;
+    if (installBtn) installBtn.style.display = "inline-flex";
+  });
+
+  window.addEventListener("appinstalled", () => {
+    deferredPwaPrompt = null;
+    if (installBtn) installBtn.style.display = "none";
+    showToast("🎉 تم تثبيت «محبرة الأخبار» كتطبيق مستقل على جهازك!");
+  });
+
+  // 3. Live Online / Offline Indicator
+  const updateNetStatus = () => {
+    const badge = document.getElementById("netStatusBadge");
+    if (!badge) return;
+    if (navigator.onLine) {
+      badge.className = "chip chip-ok";
+      badge.textContent = "🟢 متصل";
+    } else {
+      badge.className = "chip chip-warn";
+      badge.textContent = "⚡ أوفلاين (يعمل محلياً)";
+    }
+  };
+  window.addEventListener("online", updateNetStatus);
+  window.addEventListener("offline", updateNetStatus);
+  updateNetStatus();
+
+  // 4. Handle PWA Shortcuts (?tab=ticker or ?tab=editor)
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get("tab");
+    if (tabParam === "ticker") {
+      switchTab("ticker", document.querySelectorAll(".tab-btn")[1]);
+    } else if (tabParam === "editor") {
+      switchTab("editor", document.querySelectorAll(".tab-btn")[0]);
+    }
+  } catch (e) {}
+}
+
+async function installPwaApp() {
+  if (deferredPwaPrompt) {
+    deferredPwaPrompt.prompt();
+    await deferredPwaPrompt.userChoice;
+    deferredPwaPrompt = null;
+    return;
+  }
+  const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  if (isIos) {
+    showToast("📲 لتثبيته على آيفون: اضغط زر المشاركة (Share) بالمتصفح ثم «إضافة إلى الشاشة الرئيسية»");
+  } else {
+    showToast("📲 افتح رابط موقعك على Vercel واضغط أيقونة التثبيت بشريط عنوان المتصفح أو قائمة الخيارات ⬅ تثبيت التطبيق");
+  }
+}
+
+setupPwaFeatures();
 init();

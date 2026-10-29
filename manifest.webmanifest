@@ -1,0 +1,49 @@
+{
+  "id": "/",
+  "name": "مِحْبَرَة الأخبار والشريط الإخباري",
+  "short_name": "محبرة الأخبار",
+  "description": "منصة تحرير الأخبار وتفكيك النشرات إلى شريط إخباري وفق السياسة التحريرية المعتمدة",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0b1120",
+  "theme_color": "#0f766e",
+  "categories": ["news", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "تحرير خبر جديد (قالب lvo)",
+      "short_name": "تحرير خبر",
+      "url": "/?tab=editor",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "تفكيك نشرة إلى شريط إخباري",
+      "short_name": "شريط إخباري",
+      "url": "/?tab=ticker",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}
