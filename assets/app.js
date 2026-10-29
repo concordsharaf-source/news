@@ -350,33 +350,42 @@ async function callModel(engine, model, promptText) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ engine, model, prompt: promptText, apiKey })
     });
-    if (bridgeRes.status !== 404 && bridgeRes.status !== 405 && bridgeRes.status !== 501) {
+    const ct = bridgeRes.headers.get("content-type") || "";
+    if (bridgeRes.status !== 404 && bridgeRes.status !== 405 && bridgeRes.status !== 501 && ct.includes("application/json")) {
       const bridgeData = await bridgeRes.json();
       if (!bridgeRes.ok) throw new Error(bridgeData?.error || "خطأ من الخادم الوسيط");
       return (bridgeData.text || "").trim();
     }
   } catch (bridgeErr) {
-    if (bridgeErr.message && !bridgeErr.message.includes("Unexpected token") && !bridgeErr.message.includes("Failed to fetch")) {
+    // Only fall back to direct browser call if /api/ai timed out or was unreachable; rethrow real API errors
+    if (bridgeErr.message && !bridgeErr.message.includes("Failed to fetch") && !bridgeErr.message.includes("Load failed") && !bridgeErr.message.includes("NetworkError")) {
       throw bridgeErr;
     }
   }
 
   if (engine === "gemini") {
-    async function directGemini(targetModel) {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(targetModel)}:generateContent`;
+    async function directGemini(targetModel, useLowThinking) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(targetModel)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const genConfig = { temperature: 0.1 };
+      if (useLowThinking && targetModel.includes("3.8")) {
+        genConfig.thinkingConfig = { thinkingLevel: "low" };
+      }
       const r = await fetch(url, {
         method: "POST",
-        headers: { "x-goog-api-key": apiKey, "Content-Type": "application/json" },
-        body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }], generationConfig: { temperature: 0.1 } })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }], generationConfig: genConfig })
       });
       const d = await r.json();
       return { ok: r.ok, d };
     }
-    let res = await directGemini(model);
+    let res = await directGemini(model, true);
+    if (!res.ok && (res.d?.error?.message || "").toLowerCase().includes("thinking")) {
+      res = await directGemini(model, false);
+    }
     if (!res.ok) {
       const msg = res.d?.error?.message || "";
       const m = msg.match(/models\/(gemini-[a-zA-Z0-9.-]+)/);
-      if (m && m[1] && m[1] !== model) res = await directGemini(m[1]);
+      if (m && m[1] && m[1] !== model) res = await directGemini(m[1], true);
     }
     if (!res.ok) throw new Error(res.d?.error?.message || "تعذر الاتصال بـ Gemini API");
     const parts = res.d?.candidates?.[0]?.content?.parts || [];

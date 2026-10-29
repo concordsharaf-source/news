@@ -1,4 +1,4 @@
-// Vercel Serverless Function (Bridge for Yemen + Auto-Model Fallback for Gemini/Groq/OpenRouter)
+// Vercel Serverless Function (60s timeout + fast low-thinking Gemini 3.8 + CORS-clean key query)
 module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -8,21 +8,7 @@ module.exports = async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   try {
-    const { action, engine, model, prompt, apiKey } = req.body || {};
-
-    // Optional live model listing so the app never goes stale when providers update model IDs!
-    if (action === "list_models" && engine === "gemini") {
-      const key = apiKey || process.env.GEMINI_API_KEY;
-      if (!key) return res.status(400).json({ error: "مفتاح Gemini مطلوب" });
-      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`);
-      const d = await r.json();
-      if (!r.ok) return res.status(r.status).json({ error: d?.error?.message || "تعذر جلب النماذج" });
-      const models = (d.models || [])
-        .filter(m => (m.supportedGenerationMethods || []).includes("generateContent"))
-        .map(m => ({ id: m.name.replace(/^models\//, ""), name: m.displayName || m.name.replace(/^models\//, "") }));
-      return res.status(200).json({ models });
-    }
-
+    const { engine, model, prompt, apiKey } = req.body || {};
     if (!engine || !model || !prompt) {
       return res.status(400).json({ error: "بيانات الطلب غير مكتملة" });
     }
@@ -31,33 +17,39 @@ module.exports = async function handler(req, res) {
       const key = apiKey || process.env.GEMINI_API_KEY;
       if (!key) return res.status(400).json({ error: "مفتاح Gemini غير موجود" });
 
-      async function callGeminiModel(targetModel) {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(targetModel)}:generateContent`;
+      async function callGeminiModel(targetModel, useLowThinking) {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(targetModel)}:generateContent?key=${encodeURIComponent(key)}`;
+        const genConfig = { temperature: 0.1 };
+        if (useLowThinking && targetModel.includes("3.8")) {
+          genConfig.thinkingConfig = { thinkingLevel: "low" };
+        }
         const upstream = await fetch(url, {
           method: "POST",
-          headers: {
-            "x-goog-api-key": key,
-            "Content-Type": "application/json"
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.1 }
+            generationConfig: genConfig
           })
         });
         const data = await upstream.json();
         return { ok: upstream.ok, status: upstream.status, data };
       }
 
-      let attempt = await callGeminiModel(model);
+      let attempt = await callGeminiModel(model, true);
 
-      // Auto-heal if Google suggests a newer replacement model ID in error message!
+      // If thinkingConfig wasn't accepted on a variant, retry cleanly without thinkingConfig
+      if (!attempt.ok && (attempt.data?.error?.message || "").toLowerCase().includes("thinking")) {
+        attempt = await callGeminiModel(model, false);
+      }
+
+      // Auto-heal if Google suggests a replacement model
       if (!attempt.ok) {
         const errMsg = attempt.data?.error?.message || "";
         const suggestedMatch = errMsg.match(/models\/(gemini-[a-zA-Z0-9.-]+)/);
         if (suggestedMatch && suggestedMatch[1] && suggestedMatch[1] !== model) {
-          attempt = await callGeminiModel(suggestedMatch[1]);
-        } else if (errMsg.includes("no longer available") && model !== "gemini-3.8-flash") {
-          attempt = await callGeminiModel("gemini-3.8-flash");
+          attempt = await callGeminiModel(suggestedMatch[1], true);
+        } else if (errMsg.includes("no longer available") && model !== "gemini-3.5-flash-lite") {
+          attempt = await callGeminiModel("gemini-3.5-flash-lite", false);
         }
       }
 
@@ -65,7 +57,6 @@ module.exports = async function handler(req, res) {
         return res.status(attempt.status).json({ error: attempt.data?.error?.message || "خطأ من Gemini API" });
       }
 
-      // Filter out internal thinking parts (`thought: true`) on Gemini 3.8 thinking models!
       const parts = attempt.data?.candidates?.[0]?.content?.parts || [];
       const text = parts.filter(p => !p.thought).map(p => p.text || "").join("").trim();
       return res.status(200).json({ text });
