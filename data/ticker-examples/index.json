@@ -1,0 +1,8 @@
+[
+  {
+    "id": "bulletin-01",
+    "title": "تفكيك نشرة مكونة من عدة أخبار وتصريحات إلى شريط إخباري",
+    "category": "شريط",
+    "file": "data/ticker-examples/bulletin-01.json"
+  }
+]

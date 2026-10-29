@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>مِحْبَرَة الأخبار والشريط الإخباري</title>
+  <link rel="stylesheet" href="assets/style.css" />
+  <script src="https://js.puter.com/v2/" async></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="brand-icon">م</div>
+        <div>
+          <h1>مِحْبَرَة الأخبار والشريط الإخباري</h1>
+          <small>بنية ملفات مفصولة عالية السرعة (Vercel + GitHub) — متوافقة مع اليمن بدون VPN</small>
+        </div>
+      </div>
+
+      <nav class="nav-tabs">
+        <button class="tab-btn active" onclick="switchTab('editor', this)">📰 تحرير خبر</button>
+        <button class="tab-btn ticker-tab" onclick="switchTab('ticker', this)">📺 النشرة ⬅ شريط إخباري</button>
+        <button class="tab-btn" onclick="switchTab('rules', this)">📜 القواعد <span class="badge" id="rulesCountBadge">0</span></button>
+        <button class="tab-btn" onclick="switchTab('examples', this)">🎯 بنك الأمثلة <span class="badge" id="examplesCountBadge">0</span></button>
+        <button class="tab-btn" onclick="switchTab('dictionary', this)">🔎 القاموس اللغوي</button>
+        <button class="tab-btn" onclick="switchTab('engines', this)">⚡ الربط المجاني</button>
+      </nav>
+
+      <div class="top-actions">
+        <button class="icon-btn" onclick="exportBackup()">💾 تصدير JSON</button>
+        <button class="icon-btn" onclick="document.getElementById('importFile').click()">📂 استيراد</button>
+        <input type="file" id="importFile" accept=".json" style="display:none" onchange="importBackup(event)" />
+        <button class="icon-btn" onclick="toggleTheme()" id="themeBtn">🌙 ليلي</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- TAB 1: NEWS EDITOR -->
+    <section id="tab-editor" class="tab-panel active">
+      <div class="grid-2">
+        <div>
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">📥 الخبر الخام (البيان / الوكالة / المصدر)</h2>
+              <div style="display:flex; gap:5px; flex-wrap:wrap;">
+                <button class="btn btn-outline btn-sm" onclick="loadSampleRawNews()">🧪 خبر خام تجريبي</button>
+                <button class="btn btn-outline btn-sm" onclick="pasteTo('rawNewsInput')">📋 لصق</button>
+                <button class="btn btn-outline btn-sm" onclick="clearNewsDesk()">🗑️ مسح</button>
+              </div>
+            </div>
+
+            <textarea id="rawNewsInput" rows="8" placeholder="الصق الخبر الخام هنا... تُسحب القواعد والأمثلة تلقائياً من ملفات البيانات المفصولة بسرعة فائقة!" oninput="updateRawStats(); runQualityRadar();"></textarea>
+            <div style="display:flex; justify-content:space-between; margin-top:5px;" class="muted-note">
+              <span id="rawStats">0 كلمة | 0 حرف</span>
+              <span>ملفات الأمثلة تُحمَّل عند الطلب فقط (Lazy-Load) لمنع أي بطء</span>
+            </div>
+
+            <hr style="border:none; border-top:1px solid var(--border); margin:12px 0;" />
+
+            <label>1️⃣ قالب التحرير المطلوب:</label>
+            <div class="pills" id="formatPills">
+              <button class="pill active" onclick="selectFormat('standard', this)">📰 خبر صحفي قياسي</button>
+              <button class="pill" onclick="selectFormat('breaking', this)">⚡ عاجل مقتضب</button>
+              <button class="pill" onclick="selectFormat('report', this)">📊 تقرير موسّع</button>
+              <button class="pill" onclick="selectFormat('social', this)">📱 منصات وتيليجرام</button>
+              <button class="pill" onclick="selectFormat('headlines', this)">🏷️ 5 عناوين</button>
+              <button class="pill" onclick="selectFormat('proofread', this)">🩺 تدقيق لغوي فقط</button>
+            </div>
+
+            <div class="row-2" style="margin-bottom:10px;">
+              <div>
+                <label>2️⃣ تصنيف الخبر:</label>
+                <select id="newsCategory">
+                  <option value="all">تلقائي (أفضل الأمثلة)</option>
+                  <option value="سياسي">سياسي ودبلوماسي</option>
+                  <option value="ميداني">ميداني وأمني</option>
+                  <option value="اقتصادي">اقتصادي وتنموي</option>
+                  <option value="محلي">محلي وخدمي</option>
+                </select>
+              </div>
+              <div>
+                <label>3️⃣ توجيه خاص لهذا الخبر (اختياري):</label>
+                <input type="text" id="extraNote" placeholder="مثال: ركّز على تصريح الوزير" />
+              </div>
+            </div>
+
+            <div class="radar-box" style="margin-bottom:12px;">
+              <div class="row-2" style="margin-bottom:8px;">
+                <div>
+                  <label>المحرك المجاني (يمر عبر جسر Vercel لتجاوز الحجب باليمن):</label>
+                  <select id="primaryEngineSelect" onchange="updateModelDropdown('primary')"></select>
+                </div>
+                <div>
+                  <label>النموذج:</label>
+                  <select id="primaryModelSelect"></select>
+                </div>
+              </div>
+              <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text); margin-top:4px;">
+                <input type="checkbox" id="twoStageToggle" checked style="width:16px; height:16px;" />
+                <span>🛡️ <strong>نظام المرحلتين الصارم:</strong> صياغة الخبر ثم <strong>مراجعة لغوية وإملائية ثانية</strong></span>
+              </label>
+              <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text); margin-top:4px;">
+                <input type="checkbox" id="compareModeToggle" onchange="toggleCompareUI()" style="width:16px; height:16px;" />
+                <span>⚖️ <strong>مقارنة نموذجين معاً جنباً إلى جنب</strong></span>
+              </label>
+              <div id="secondaryEngineRow" class="row-2" style="display:none; margin-top:8px; padding-top:8px; border-top:1px dashed var(--border);">
+                <div>
+                  <label>المحرك الثاني:</label>
+                  <select id="secondaryEngineSelect" onchange="updateModelDropdown('secondary')"></select>
+                </div>
+                <div>
+                  <label>النموذج الثاني:</label>
+                  <select id="secondaryModelSelect"></select>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:flex; flex-wrap:wrap; gap:8px;">
+              <button class="btn btn-primary" id="runAiBtn" style="flex:1; min-width:200px;" onclick="runEditorialWorkflow()">
+                🚀 حرّر الخبر ودقّقه الآن
+              </button>
+              <button class="btn btn-accent" onclick="copyCompiledPrompt('news')">
+                📋 نسخ الأمر الشامل
+              </button>
+            </div>
+
+            <div style="margin-top:11px; padding-top:10px; border-top:1px solid var(--border);">
+              <div class="muted-note">🌐 <strong>أزرار الفتح السريع لحساباتك المجانية (تعمل في اليمن بدون VPN ✅):</strong></div>
+              <div class="web-launchers">
+                <button class="btn btn-outline btn-sm" onclick="copyAndOpenWeb('news', 'https://gemini.google.com/app', 'Gemini')">🟣 Gemini ✅</button>
+                <button class="btn btn-outline btn-sm" onclick="copyAndOpenWeb('news', 'https://chat.deepseek.com/', 'DeepSeek')">🔵 DeepSeek ✅</button>
+                <button class="btn btn-outline btn-sm" onclick="copyAndOpenWeb('news', 'https://chatgpt.com/', 'ChatGPT')">🟢 ChatGPT ✅</button>
+                <button class="btn btn-outline btn-sm" onclick="copyAndOpenWeb('news', 'https://chat.qwen.ai/', 'Qwen')">🔷 Qwen ✅</button>
+                <button class="btn btn-outline btn-sm" onclick="previewPromptModal('news')">👁️ معاينة الأمر</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">📰 الخبر المحرر والمدقق النهائي</h2>
+              <div style="display:flex; gap:5px; flex-wrap:wrap;">
+                <button class="btn btn-ok btn-sm" onclick="autoFixArabicErrors('editedNewsOutput')">✨ تصحيح الإملاء بضغطة</button>
+                <button class="btn btn-outline btn-sm" onclick="runSecondPassProofreadOnly('news')">🩺 تدقيق لغوي ثانٍ</button>
+                <button class="btn btn-primary btn-sm" onclick="copyOutput('editedNewsOutput')">📋 نسخ للنشر</button>
+              </div>
+            </div>
+
+            <div id="statusBar" class="status-bar"><span id="statusText"></span></div>
+
+            <div id="compareContainer" style="display:none; margin-bottom:12px;">
+              <div class="compare-grid">
+                <div class="compare-col">
+                  <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                    <strong id="compTitleA" style="font-size:0.82rem;">النموذج أ</strong>
+                    <button class="btn btn-primary btn-sm" onclick="adoptComparison('A')">اعتماد ⬇️</button>
+                  </div>
+                  <textarea id="compOutputA" rows="7"></textarea>
+                </div>
+                <div class="compare-col">
+                  <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                    <strong id="compTitleB" style="font-size:0.82rem;">النموذج ب</strong>
+                    <button class="btn btn-primary btn-sm" onclick="adoptComparison('B')">اعتماد ⬇️</button>
+                  </div>
+                  <textarea id="compOutputB" rows="7"></textarea>
+                </div>
+              </div>
+            </div>
+
+            <textarea id="editedNewsOutput" rows="10" placeholder="الخبر المحرر النهائي يظهر هنا..." oninput="runQualityRadar()"></textarea>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-top:7px;">
+              <span id="editedStats" class="muted-note">0 كلمة | 0 حرف</span>
+              <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                <button class="btn btn-outline btn-sm" onclick="sendEditedNewsToTicker()">📺 فكّك لشريط</button>
+                <button class="btn btn-warn btn-sm" onclick="saveCurrentNewsAsExample()">⭐ حفظ في أمثلتي</button>
+              </div>
+            </div>
+
+            <div class="radar-box">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <strong style="font-size:0.88rem;">🛡️ رادار مطابقة الأرقام والسلامة اللغوية</strong>
+                <span id="radarSummaryBadge" class="chip chip-ok">جاهز</span>
+              </div>
+              <div style="margin-top:8px;">
+                <div class="muted-note">🔢 <strong>أمان الأرقام والتواريخ:</strong></div>
+                <div class="chip-list" id="numberGuardChips"></div>
+              </div>
+              <div style="margin-top:8px; padding-top:8px; border-top:1px dashed var(--border);">
+                <div class="muted-note">✍️ <strong>فحص الهمزات والإملاء والممنوعات:</strong></div>
+                <div class="chip-list" id="orthographyChips"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: BULLETIN -> TICKER -->
+    <section id="tab-ticker" class="tab-panel">
+      <div class="grid-2">
+        <div>
+          <div class="card" style="border-top: 4px solid var(--ticker);">
+            <div class="card-header">
+              <h2 class="card-title">📺 النشرة الإخبارية الخام</h2>
+              <div style="display:flex; gap:5px; flex-wrap:wrap;">
+                <button class="btn btn-outline btn-sm" onclick="loadSampleBulletin()">🧪 نشرة تجريبية</button>
+                <button class="btn btn-outline btn-sm" onclick="pasteTo('rawBulletinInput')">📋 لصق النشرة</button>
+                <button class="btn btn-outline btn-sm" onclick="clearTickerDesk()">🗑️ مسح</button>
+              </div>
+            </div>
+
+            <textarea id="rawBulletinInput" rows="11" placeholder="الصق النشرة الخام الكاملة هنا... سيقوم النظام بتفكيكها إلى فقرات شريط إخباري مستقلة المعنى ومضبوطة الطول وفق قواعدك ونماذج نشراتك المحفوظة!" oninput="updateBulletinStats(); runTickerRadar();"></textarea>
+            <div style="display:flex; justify-content:space-between; margin-top:5px;" class="muted-note">
+              <span id="bulletinStats">0 كلمة | 0 حرف</span>
+              <span>تُسحب أمثلة النشرات من ملفات منفصلة عند التنفيذ فقط</span>
+            </div>
+
+            <hr style="border:none; border-top:1px solid var(--border); margin:12px 0;" />
+
+            <div class="row-3" style="margin-bottom:10px;">
+              <div>
+                <label>أقصى كلمات لفقرة الشريط:</label>
+                <input type="number" id="tickerMaxWords" value="16" min="6" max="35" oninput="runTickerRadar()" />
+              </div>
+              <div>
+                <label>طريقة عرض الفقرات:</label>
+                <select id="tickerSeparator" onchange="refreshTickerPreviewBar()">
+                  <option value="newline">فقرات تحت بعض (كل فقرة بسطر)</option>
+                  <option value="bullet">نقطة بداية لكل فقرة (• ...)</option>
+                  <option value="dash">شرطة بداية لكل فقرة (- ...)</option>
+                  <option value="inline">شريط متصل بفاصل ( • )</option>
+                </select>
+              </div>
+              <div>
+                <label>نسبة المصادر في الفقرات:</label>
+                <select id="tickerAttributionMode">
+                  <option value="repeat">تكرار المصدر بداية كل فقرة متفرعة</option>
+                  <option value="compact">عناوين خبرية مستقلة</option>
+                </select>
+              </div>
+            </div>
+
+            <div style="margin-bottom:11px;">
+              <label>توجيه إضافي خاص بهذه النشرة (اختياري):</label>
+              <input type="text" id="tickerExtraNote" placeholder="مثال: استبعد الأخبار الرياضية" />
+            </div>
+
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text); margin-bottom:12px;">
+              <input type="checkbox" id="tickerTwoStage" checked style="width:16px; height:16px;" />
+              <span>🛡️ <strong>مراجعة لغوية وفحص استقلالية الفقرات (مرحلتان)</strong></span>
+            </label>
+
+            <div style="display:flex; flex-wrap:wrap; gap:8px;">
+              <button class="btn btn-ticker" id="runTickerBtn" style="flex:1; min-width:220px;" onclick="runTickerWorkflow()">
+                📺 فكّك النشرة إلى شريط إخباري الآن
+              </button>
+              <button class="btn btn-accent" onclick="copyCompiledPrompt('ticker')">
+                📋 نسخ أمر الشريط الشامل
+              </button>
+            </div>
+
+            <div style="margin-top:11px; padding-top:10px; border-top:1px solid var(--border);">
+              <div class="muted-note">🌐 <strong>أو انسخ أمر تفكيك النشرة لحسابك المجاني (متوافق مع اليمن ✅):</strong></div>
+              <div class="web-launchers">
+                <button class="btn btn-outline btn-sm" onclick="copyAndOpenWeb('ticker', 'https://gemini.google.com/app', 'Gemini')">🟣 Gemini ✅</button>
+                <button class="btn btn-outline btn-sm" onclick="copyAndOpenWeb('ticker', 'https://chat.deepseek.com/', 'DeepSeek')">🔵 DeepSeek ✅</button>
+                <button class="btn btn-outline btn-sm" onclick="copyAndOpenWeb('ticker', 'https://chatgpt.com/', 'ChatGPT')">🟢 ChatGPT ✅</button>
+                <button class="btn btn-outline btn-sm" onclick="copyAndOpenWeb('ticker', 'https://chat.qwen.ai/', 'Qwen')">🔷 Qwen ✅</button>
+                <button class="btn btn-outline btn-sm" onclick="previewPromptModal('ticker')">👁️ معاينة أمر الشريط</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="card" style="border-top: 4px solid var(--ticker);">
+            <div class="card-header">
+              <h2 class="card-title">🎞️ الشريط الإخباري المستخرج</h2>
+              <div style="display:flex; gap:5px; flex-wrap:wrap;">
+                <button class="btn btn-ok btn-sm" onclick="autoFixArabicErrors('tickerOutput')">✨ تصحيح الإملاء</button>
+                <button class="btn btn-outline btn-sm" onclick="runSecondPassProofreadOnly('ticker')">🩺 تدقيق لغوي ثانٍ</button>
+                <button class="btn btn-ticker btn-sm" onclick="copyFormattedTicker()">📋 نسخ الشريط</button>
+                <button class="btn btn-outline btn-sm" onclick="downloadTickerTxt()">⬇️ ملف .txt للبث</button>
+              </div>
+            </div>
+
+            <div id="tickerStatusBar" class="status-bar"><span id="tickerStatusText"></span></div>
+
+            <textarea id="tickerOutput" rows="11" placeholder="فقرات الشريط الإخباري المفككة ستظهر هنا..." oninput="runTickerRadar()"></textarea>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-top:7px;">
+              <span id="tickerStats" class="muted-note">0 فقرة شريط | 0 كلمة إجمالاً</span>
+              <button class="btn btn-warn btn-sm" onclick="saveCurrentTickerAsExample()">⭐ حفظ (النشرة + الشريط) في أمثلتي</button>
+            </div>
+
+            <div class="tv-ticker-wrap">
+              <div class="tv-ticker-badge">الشريط الإخباري</div>
+              <div class="tv-ticker-track" id="liveTvCrawlPreview">معاينة فقرات الشريط على الشاشة...</div>
+            </div>
+
+            <div class="radar-box">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <strong style="font-size:0.88rem;">🛡️ فاحص فقرات الشريط (الطول + الاستقلالية + الأرقام + الإملاء)</strong>
+                <span id="tickerRadarBadge" class="chip chip-ok">بانتظار الشريط</span>
+              </div>
+              <div class="chip-list" id="tickerAlertsChips"></div>
+              <div style="margin-top:9px;">
+                <div class="muted-note">📏 <strong>عداد الكلمات لكل فقرة على حدة:</strong></div>
+                <div class="ticker-item-preview" id="tickerLinesInspector"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: RULES -->
+    <section id="tab-rules" class="tab-panel">
+      <div class="pills" style="margin-bottom:14px;">
+        <button class="pill active" id="ruleSubNewsBtn" onclick="switchRuleSub('news')">📰 قواعد تحرير الأخبار</button>
+        <button class="pill" id="ruleSubTickerBtn" onclick="switchRuleSub('ticker')">📺 قواعد الشريط الإخباري وتفكيك النشرات</button>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <h2 class="card-title" id="ruleFormTitle" style="margin-bottom:8px;">➕ إضافة قواعد تحرير الأخبار</h2>
+          <label>إضافة قاعدة واحدة:</label>
+          <div style="display:flex; gap:8px; margin-bottom:14px;">
+            <input type="text" id="singleRuleInput" placeholder="اكتب القاعدة هنا..." onkeydown="if(event.key==='Enter') addSingleRule()" />
+            <button class="btn btn-primary" onclick="addSingleRule()">إضافة</button>
+          </div>
+          <label>📥 أو الصق قواعدك دفعة واحدة (كل سطر = قاعدة):</label>
+          <textarea id="bulkRulesInput" rows="7"></textarea>
+          <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+            <button class="btn btn-primary" onclick="addBulkRules(false)">➕ إضافة فوق الحالية</button>
+            <button class="btn btn-warn" onclick="addBulkRules(true)">🔄 استبدال بقواعدي فقط</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">📜 القواعد المفعّلة</h2>
+            <button class="btn btn-outline btn-sm" onclick="resetCurrentRules()">استعادة ملفات المستودع الأصلية</button>
+          </div>
+          <div id="rulesListContainer"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: EXAMPLES -->
+    <section id="tab-examples" class="tab-panel">
+      <div class="pills" style="margin-bottom:14px;">
+        <button class="pill active" id="exSubNewsBtn" onclick="switchExSub('news')">📰 أمثلة الأخبار (data/news-examples/)</button>
+        <button class="pill" id="exSubTickerBtn" onclick="switchExSub('ticker')">📺 أمثلة النشرات والشريط (data/ticker-examples/)</button>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <h2 class="card-title" style="margin-bottom:8px;">🎯 إضافة مثال سريع من المتصفح</h2>
+          <div class="row-2" style="margin-bottom:10px;">
+            <div>
+              <label>عنوان المثال:</label>
+              <input type="text" id="exTitleInput" placeholder="مثال: نشرة المساء وتفكيكها" />
+            </div>
+            <div id="exCatWrapper">
+              <label>تصنيف المثال:</label>
+              <select id="exCategoryInput">
+                <option value="عام">عام</option>
+                <option value="سياسي">سياسي ودبلوماسي</option>
+                <option value="ميداني">ميداني وأمني</option>
+                <option value="اقتصادي">اقتصادي وتنموي</option>
+                <option value="محلي">محلي وخدمي</option>
+              </select>
+            </div>
+          </div>
+          <label id="exRawLabel">1. النص الخام:</label>
+          <textarea id="exRawInput" rows="5"></textarea>
+          <label id="exEditedLabel" style="margin-top:10px;">2. النسخة المعتمدة:</label>
+          <textarea id="exEditedInput" rows="5"></textarea>
+          <button class="btn btn-primary" style="margin-top:12px; width:100%;" onclick="addExamplePair()">💾 حفظ</button>
+        </div>
+        <div class="card">
+          <h2 class="card-title" style="margin-bottom:10px;">📚 فهرس الأمثلة (تُحمَّل تفاصيل كل ملف عند الطلب فقط)</h2>
+          <div id="examplesListContainer"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 5: DICTIONARY -->
+    <section id="tab-dictionary" class="tab-panel">
+      <div class="grid-2">
+        <div class="card">
+          <h2 class="card-title" style="margin-bottom:8px;">➕ إضافة تصويب لغوي أو كلمة ممنوعة</h2>
+          <div class="row-2" style="margin-bottom:10px;">
+            <div>
+              <label>الكلمة الخاطئة / الممنوعة:</label>
+              <input type="text" id="dictBadInput" />
+            </div>
+            <div>
+              <label>الصواب المعتمد:</label>
+              <input type="text" id="dictGoodInput" />
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="addDictItem()">➕ إضافة للقاموس</button>
+        </div>
+        <div class="card">
+          <h2 class="card-title" style="margin-bottom:10px;">🔎 قاموس الضبط الإملائي النشط</h2>
+          <div id="dictListContainer" style="max-height:460px; overflow-y:auto;"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 6: ENGINES -->
+    <section id="tab-engines" class="tab-panel">
+      <div class="card">
+        <h2 class="card-title" style="margin-bottom:8px;">⚡ إعداد المحركات المجانية (مع جسر Vercel المدمج لليمن بدون VPN!)</h2>
+        <p class="muted-note" style="margin-bottom:16px;">
+          مفاجأة سارة لنشرك على <strong>Vercel</strong>: أضفتُ لك داخل المشروع خادماً وسيطاً خفيفاً (<code>/api/ai.js</code>) يعمل على خوادم Vercel في الخارج؛ ما يعني أن طلبات <strong>Groq و OpenRouter و Gemini</strong> تمر عبر سيرفر Vercel فـ <strong>تتجاوز الحجب الجغرافي في اليمن تلقائياً بدون VPN</strong> ودون حفظ أي مفتاح في الكود!
+        </p>
+
+        <div class="grid-2">
+          <div class="radar-box" style="margin-top:0; border-color: var(--ok);">
+            <h3 style="margin:0 0 6px; font-size:0.96rem; color: var(--ok);">1️⃣ مفتاح Google Gemini المجاني (1,500 طلب/يوم بحساب Gmail فقط)</h3>
+            <p class="muted-note">من: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:var(--primary); font-weight:bold;">aistudio.google.com/apikey</a></p>
+            <input type="password" id="geminiKeyInput" placeholder="AIza..." oninput="saveApiKeys()" />
+          </div>
+
+          <div class="radar-box" style="margin-top:0;">
+            <h3 style="margin:0 0 6px; font-size:0.96rem;">2️⃣ مفتاح Groq المجاني (يعمل الآن في اليمن عبر جسر Vercel!)</h3>
+            <p class="muted-note">من: <a href="https://console.groq.com/keys" target="_blank" rel="noopener" style="color:var(--primary); font-weight:bold;">console.groq.com/keys</a></p>
+            <input type="password" id="groqKeyInput" placeholder="gsk_..." oninput="saveApiKeys()" />
+          </div>
+
+          <div class="radar-box" style="margin-top:0;">
+            <h3 style="margin:0 0 6px; font-size:0.96rem;">3️⃣ مفتاح OpenRouter للنماذج المجانية (:free)</h3>
+            <p class="muted-note">من: <a href="https://openrouter.ai/keys" target="_blank" rel="noopener" style="color:var(--primary); font-weight:bold;">openrouter.ai/keys</a></p>
+            <input type="password" id="openrouterKeyInput" placeholder="sk-or-..." oninput="saveApiKeys()" />
+          </div>
+
+          <div class="radar-box" style="margin-top:0;">
+            <h3 style="margin:0 0 6px; font-size:0.96rem;">4️⃣ وسيط Puter السحابي المجاني (لتشغيل Claude Sonnet بدون مفتاح)</h3>
+            <p class="muted-note">جاهز تلقائياً في القائمة المنسدلة دون أي مفتاح.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="promptModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:200; padding:24px; overflow-y:auto;">
+    <div class="card" style="max-width:840px; margin:26px auto;">
+      <div class="card-header">
+        <h3 class="card-title">👁️ معاينة الأمر المُجمّع</h3>
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('promptModal').style.display='none'">إغلاق ✖</button>
+      </div>
+      <textarea id="promptPreviewBox" rows="15" readonly></textarea>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+  <script src="assets/app.js"></script>
+</body>
+</html>
