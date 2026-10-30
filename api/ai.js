@@ -138,7 +138,13 @@ export default async function handler(req, res) {
       const targetRoute = model === "ovh-meta-llama-3.3-70b" ? "llama-3.3-70b" : (model || "qwen-397b");
       const resKeyless = await tryAllKeylessRoutes(targetRoute, prompt);
       if (resKeyless.ok) {
-        return res.status(200).json({ text: resKeyless.text, usedRoute: resKeyless.usedRoute });
+        const keepGroqLlama = engine === "groq" && model === "ovh-meta-llama-3.3-70b" && resKeyless.usedRoute === "llama-3.3-70b";
+        return res.status(200).json({
+          text: resKeyless.text,
+          usedRoute: resKeyless.usedRoute,
+          usedEngine: keepGroqLlama ? "groq" : "instant_free",
+          usedModel: keepGroqLlama ? "ovh-meta-llama-3.3-70b" : resKeyless.usedRoute
+        });
       }
       if (!engine || engine === "instant_free") {
         return res.status(502).json({
@@ -183,6 +189,7 @@ export default async function handler(req, res) {
         return { ok: r.ok, status: r.status, data: d };
       }
 
+      let finalGemModel = model;
       let attempt = await tryGeminiModel(model, true);
       if (!attempt.ok) {
         const errMsg = attempt.data?.error?.message || "";
@@ -196,6 +203,7 @@ export default async function handler(req, res) {
         const suggested = match ? match[1] : (model !== "gemini-3.8-flash" ? "gemini-3.8-flash" : "gemini-3.5-flash-lite");
         if (suggested && suggested !== model) {
           attempt = await tryGeminiModel(suggested, true);
+          if (attempt.ok) finalGemModel = suggested;
         }
       }
       if (!attempt.ok) {
@@ -203,7 +211,7 @@ export default async function handler(req, res) {
       }
       const parts = attempt.data?.candidates?.[0]?.content?.parts || [];
       const text = parts.filter(p => !p.thought).map(p => p.text || "").join("").trim();
-      return res.status(200).json({ text });
+      return res.status(200).json({ text, usedEngine: "gemini", usedModel: finalGemModel });
     }
 
     // =====================================================================
@@ -258,7 +266,7 @@ export default async function handler(req, res) {
         }
         if (resGroq.ok) {
           const text = stripThinkTags(resGroq.data?.choices?.[0]?.message?.content);
-          if (text) return res.status(200).json({ text, usedModel: candidate });
+          if (text) return res.status(200).json({ text, usedEngine: "groq", usedModel: candidate });
         }
         if (resGroq.status === 401) {
           return res.status(401).json({
@@ -270,7 +278,7 @@ export default async function handler(req, res) {
 
       const backup = await tryAllKeylessRoutes("qwen-397b", prompt);
       if (backup.ok) {
-        return res.status(200).json({ text: backup.text, usedRoute: backup.usedRoute });
+        return res.status(200).json({ text: backup.text, usedRoute: backup.usedRoute, usedEngine: "instant_free", usedModel: backup.usedRoute });
       }
       return res.status(502).json({ error: lastGroqErr || "خطأ من خادم Groq" });
     }
@@ -300,7 +308,7 @@ export default async function handler(req, res) {
         const d = await r.json();
         if (r.ok) {
           const text = stripThinkTags(d?.choices?.[0]?.message?.content);
-          if (text) return res.status(200).json({ text, usedModel: orModel });
+          if (text) return res.status(200).json({ text, usedEngine: "openrouter", usedModel: orModel });
         }
         if (r.status === 401) {
           return res.status(401).json({ error: "مفتاح OpenRouter غير صالح." });
@@ -309,7 +317,7 @@ export default async function handler(req, res) {
       }
       const backup = await tryAllKeylessRoutes("qwen-397b", prompt);
       if (backup.ok) {
-        return res.status(200).json({ text: backup.text, usedRoute: backup.usedRoute });
+        return res.status(200).json({ text: backup.text, usedRoute: backup.usedRoute, usedEngine: "instant_free", usedModel: backup.usedRoute });
       }
       return res.status(502).json({ error: lastOrErr || "خطأ من خادم OpenRouter" });
     }

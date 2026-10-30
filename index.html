@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="assets/style.css?v=27" />
+  <link rel="stylesheet" href="assets/style.css?v=28" />
 </head>
 <body>
   <header class="topbar">
@@ -61,9 +61,16 @@
             </div>
 
             <textarea id="rawNewsInput" rows="8" placeholder="الصق الخبر الخام هنا... سيتم تطبيق القالب المعتمد (المنطقة + كبشن 10 كلمات + المقدمة + lvo + وأفادت مصادر + وأضافت المصادر + الخاتمة) وتحويل الأرقام للحروف وضبط المصطلحات تلقائياً!" oninput="updateRawStats(); runQualityRadar();"></textarea>
-            <div style="display:flex; justify-content:space-between; margin-top:5px;" class="muted-note">
+
+            <div style="margin-top:8px;">
+              <button class="btn btn-primary" id="runAiBtn" style="width:100%; font-size:0.98rem; padding:11px 16px;" onclick="runEditorialWorkflow()">
+                🚀 تحرير الخبر
+              </button>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-top:6px;" class="muted-note">
               <span id="rawStats">0 كلمة | 0 حرف</span>
-              <span>جميع القواعد الـ 23 المعتمدة مفعّلة تلقائياً</span>
+              <span id="activeModelQuickBadge" style="font-weight:700; color:var(--primary);">🤖 النموذج النشط</span>
             </div>
 
             <hr style="border:none; border-top:1px solid var(--border); margin:12px 0;" />
@@ -73,7 +80,7 @@
               <input type="text" id="extraNote" placeholder="مثال: استهل بـ «وأفادت مصادر طبية»" />
             </div>
 
-            <div class="radar-box" style="margin-bottom:12px;">
+            <div class="radar-box">
               <div id="missingKeyBanner" style="display:none; background:var(--warn-soft); color:var(--warn); border:1px solid var(--warn); border-radius:9px; padding:9px 11px; margin-bottom:10px; font-size:0.82rem;">
                 🔑 <strong>مفتاح اختياري إضافي:</strong> الصق مفتاح Groq أو OpenRouter أو Gemini هنا عند الحاجة:
                 <div style="display:flex; gap:6px; margin-top:6px;">
@@ -83,12 +90,12 @@
               </div>
               <div class="row-2" style="margin-bottom:8px;">
                 <div>
-                  <label>المحرك المجاني (عبر جسر Vercel لليمن ✅):</label>
-                  <select id="primaryEngineSelect" onchange="updateModelDropdown('primary')"></select>
+                  <label>المحرك المحفوظ (ثابت تلقائياً):</label>
+                  <select id="primaryEngineSelect" onchange="onUserChangeEngine('primary')"></select>
                 </div>
                 <div>
-                  <label>النموذج:</label>
-                  <select id="primaryModelSelect"></select>
+                  <label>النموذج المحفوظ (لا يتغير إلا بتغييرك أو انتهاء حصته):</label>
+                  <select id="primaryModelSelect" onchange="onUserChangeModel()"></select>
                 </div>
               </div>
               <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text); margin-top:4px;">
@@ -102,19 +109,13 @@
               <div id="secondaryEngineRow" class="row-2" style="display:none; margin-top:8px; padding-top:8px; border-top:1px dashed var(--border);">
                 <div>
                   <label>المحرك الثاني:</label>
-                  <select id="secondaryEngineSelect" onchange="updateModelDropdown('secondary')"></select>
+                  <select id="secondaryEngineSelect" onchange="onUserChangeEngine('secondary')"></select>
                 </div>
                 <div>
                   <label>النموذج الثاني:</label>
-                  <select id="secondaryModelSelect"></select>
+                  <select id="secondaryModelSelect" onchange="onUserChangeModel()"></select>
                 </div>
               </div>
-            </div>
-
-            <div style="display:flex; flex-wrap:wrap; gap:8px;">
-              <button class="btn btn-primary" id="runAiBtn" style="flex:1; min-width:200px;" onclick="runEditorialWorkflow()">
-                🚀 حرّر الخبر بالقالب المعتمد الآن
-              </button>
             </div>
           </div>
         </div>
@@ -223,9 +224,16 @@
             </div>
 
             <textarea id="rawBulletinInput" rows="11" placeholder="الصق النشرة الخام الكاملة هنا لتفكيكها إلى فقرات شريط إخباري وفق قواعد الشريط المعتمدة لديك!" onpaste="clearPreviousTickerIfAny()" oninput="updateBulletinStats(); runTickerRadar();"></textarea>
-            <div style="display:flex; justify-content:space-between; margin-top:5px;" class="muted-note">
+
+            <div style="margin-top:8px;">
+              <button class="btn btn-ticker" id="runTickerBtn" style="width:100%; font-size:0.98rem; padding:11px 16px;" onclick="runTickerWorkflow()">
+                📺 فكّك النشرة إلى شريط إخباري الآن
+              </button>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-top:6px;" class="muted-note">
               <span id="bulletinStats">0 كلمة | 0 حرف</span>
-              <span>جاهز لاستقبال قواعد الشريط الإخباري الخاصة بك أيضاً!</span>
+              <span id="activeTickerModelQuickBadge" style="font-weight:700; color:var(--ticker);">🤖 النموذج النشط</span>
             </div>
 
             <hr style="border:none; border-top:1px solid var(--border); margin:12px 0;" />
@@ -258,27 +266,21 @@
               <input type="text" id="tickerExtraNote" placeholder="مثال: ركّز على الأخبار الميدانية أولاً" />
             </div>
 
-            <div class="radar-box" style="margin-bottom:12px;">
+            <div class="radar-box">
               <div class="row-2" style="margin-bottom:8px;">
                 <div>
-                  <label>المحرك المجاني للشريط (بدون VPN ✅):</label>
-                  <select id="tickerEngineSelect" onchange="updateModelDropdown('ticker')"></select>
+                  <label>المحرك المحفوظ للشريط (ثابت تلقائياً):</label>
+                  <select id="tickerEngineSelect" onchange="onUserChangeEngine('ticker')"></select>
                 </div>
                 <div>
-                  <label>النموذج العامل الآن:</label>
-                  <select id="tickerModelSelect"></select>
+                  <label>النموذج المحفوظ (لا يتغير إلا بتغييرك أو انتهاء حصته):</label>
+                  <select id="tickerModelSelect" onchange="onUserChangeModel()"></select>
                 </div>
               </div>
               <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text); margin:0;">
                 <input type="checkbox" id="tickerTwoStage" style="width:16px; height:16px;" />
                 <span><strong>المراجعة المزدوجة</strong></span>
               </label>
-            </div>
-
-            <div style="display:flex; flex-wrap:wrap; gap:8px;">
-              <button class="btn btn-ticker" id="runTickerBtn" style="flex:1; min-width:220px;" onclick="runTickerWorkflow()">
-                📺 فكّك النشرة إلى شريط إخباري الآن
-              </button>
             </div>
           </div>
         </div>
@@ -510,6 +512,6 @@
   </div>
 
   <div id="toast" class="toast"></div>
-  <script src="assets/app.js?v=27"></script>
+  <script src="assets/app.js?v=28"></script>
 </body>
 </html>

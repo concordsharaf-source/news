@@ -99,6 +99,12 @@ let state = {
   lastAiNewsDraft: "",
   lastAiTickerDraft: "",
   keys: SafeStorage.get("nr_keys_v1", { groq: "", openrouter: "", gemini: "", github: "" }),
+  modelPrefs: SafeStorage.get("nr_model_prefs_v1", {
+    primaryEngine: "", primaryModel: "",
+    secondaryEngine: "", secondaryModel: "",
+    tickerEngine: "", tickerModel: "",
+    updatedAt: 0
+  }),
   selectedFormat: "lvo_standard",
   ruleSubTab: "news",
   exSubTab: "news",
@@ -147,16 +153,18 @@ function buildEncodedVaultObject(keysObj) {
     openrouter: encodeVaultValue(keysObj?.openrouter),
     gemini: encodeVaultValue(keysObj?.gemini),
     github: encodeVaultValue(keysObj?.github),
+    modelPrefs: state.modelPrefs || null,
     updatedAt: new Date().toISOString()
   };
 }
 function decodeVaultObject(vaultObj) {
-  if (!vaultObj || typeof vaultObj !== "object") return { groq: "", openrouter: "", gemini: "", github: "" };
+  if (!vaultObj || typeof vaultObj !== "object") return { groq: "", openrouter: "", gemini: "", github: "", modelPrefs: null };
   return {
     groq: decodeVaultValue(vaultObj.groq),
     openrouter: decodeVaultValue(vaultObj.openrouter),
     gemini: decodeVaultValue(vaultObj.gemini),
-    github: decodeVaultValue(vaultObj.github)
+    github: decodeVaultValue(vaultObj.github),
+    modelPrefs: vaultObj.modelPrefs || null
   };
 }
 async function fetchLiveSharedVault(optionalToken) {
@@ -240,6 +248,10 @@ async function init() {
     github: remoteVaultKeys.github || localInitialKeys.github || ""
   };
   SafeStorage.set("nr_keys_v1", state.keys);
+  if (remoteVaultKeys.modelPrefs && (remoteVaultKeys.modelPrefs.updatedAt || 0) > (state.modelPrefs?.updatedAt || 0)) {
+    state.modelPrefs = remoteVaultKeys.modelPrefs;
+    SafeStorage.set("nr_model_prefs_v1", state.modelPrefs);
+  }
   document.getElementById("geminiKeyInput").value = state.keys.gemini;
   document.getElementById("groqKeyInput").value = state.keys.groq;
   document.getElementById("openrouterKeyInput").value = state.keys.openrouter;
@@ -328,45 +340,104 @@ async function refreshLiveOpenRouterFreeModels() {
     ];
     ENGINES.openrouter.models = routerFirst;
 
-    // Refresh any dropdown currently showing openrouter while preserving selection
+    // Refresh any dropdown currently showing openrouter while preserving saved selection
     ["primary", "secondary", "ticker"].forEach(which => {
       const engEl = document.getElementById(which + "EngineSelect");
       const modEl = document.getElementById(which + "ModelSelect");
       if (engEl && modEl && engEl.value === "openrouter") {
-        const prev = modEl.value;
-        updateModelDropdown(which);
-        if ([...modEl.options].some(o => o.value === prev)) modEl.value = prev;
+        const prev = state.modelPrefs?.[which + "Model"] || modEl.value;
+        updateModelDropdown(which, prev);
       }
     });
+    refreshActiveModelBadges();
   } catch (e) {}
 }
 
-function populateEngineSelectors() {
-  const pSel = document.getElementById("primaryEngineSelect");
-  const sSel = document.getElementById("secondaryEngineSelect");
-  const tSel = document.getElementById("tickerEngineSelect");
-  pSel.innerHTML = ""; sSel.innerHTML = "";
-  if (tSel) tSel.innerHTML = "";
+function refreshActiveModelBadges() {
+  const pEng = document.getElementById("primaryEngineSelect")?.value || "";
+  const pModSel = document.getElementById("primaryModelSelect");
+  const pModLabel = pModSel?.options?.[pModSel.selectedIndex]?.textContent?.split("(")[0]?.trim() || pModSel?.value || "";
+  const newsBadge = document.getElementById("activeModelQuickBadge");
+  if (newsBadge && pModLabel) newsBadge.textContent = `🤖 النموذج النشط: ${pModLabel}`;
 
-  for (const [k, v] of Object.entries(ENGINES)) {
-    const opt = `<option value="${k}">${v.label}</option>`;
-    pSel.innerHTML += opt;
-    sSel.innerHTML += opt;
-    if (tSel) tSel.innerHTML += opt;
+  const tModSel = document.getElementById("tickerModelSelect");
+  const tModLabel = tModSel?.options?.[tModSel.selectedIndex]?.textContent?.split("(")[0]?.trim() || tModSel?.value || "";
+  const tickerBadge = document.getElementById("activeTickerModelQuickBadge");
+  if (tickerBadge && tModLabel) tickerBadge.textContent = `🤖 النموذج النشط: ${tModLabel}`;
+}
+
+let modelPrefsSyncTimer = null;
+function saveSelectedModelPrefs(syncCloud = true) {
+  state.modelPrefs = {
+    primaryEngine: document.getElementById("primaryEngineSelect")?.value || state.modelPrefs?.primaryEngine || "",
+    primaryModel: document.getElementById("primaryModelSelect")?.value || state.modelPrefs?.primaryModel || "",
+    secondaryEngine: document.getElementById("secondaryEngineSelect")?.value || state.modelPrefs?.secondaryEngine || "",
+    secondaryModel: document.getElementById("secondaryModelSelect")?.value || state.modelPrefs?.secondaryModel || "",
+    tickerEngine: document.getElementById("tickerEngineSelect")?.value || state.modelPrefs?.tickerEngine || "",
+    tickerModel: document.getElementById("tickerModelSelect")?.value || state.modelPrefs?.tickerModel || "",
+    updatedAt: Date.now()
+  };
+  SafeStorage.set("nr_model_prefs_v1", state.modelPrefs);
+  refreshActiveModelBadges();
+
+  if (syncCloud && state.keys.github) {
+    if (modelPrefsSyncTimer) clearTimeout(modelPrefsSyncTimer);
+    modelPrefsSyncTimer = setTimeout(() => {
+      githubPutFile(state.keys.github, "data/shared-keys.json", buildEncodedVaultObject(state.keys), "حفظ آخر نموذج مختار").catch(() => {});
+    }, 2000);
   }
+}
 
+function onUserChangeEngine(which) {
+  updateModelDropdown(which, "");
+  saveSelectedModelPrefs(true);
+}
+
+function onUserChangeModel() {
+  saveSelectedModelPrefs(true);
+}
+
+function adoptReplacementModel(slot, newEngine, newModel) {
+  if (!slot || !newEngine || !newModel || !ENGINES[newEngine]) return;
+  const engEl = document.getElementById(slot + "EngineSelect");
+  const modEl = document.getElementById(slot + "ModelSelect");
+  if (!engEl || !modEl) return;
+  engEl.value = newEngine;
+  updateModelDropdown(slot, newModel);
+  saveSelectedModelPrefs(true);
+  showToast(`⚡ انتهت حصة النموذج السابق فتم الانتقال تلقائياً إلى (${newModel}) واعتماده`);
+}
+
+function populateEngineSelectors() {
+  const slots = ["primary", "secondary", "ticker"];
   const defEngine = state.keys.groq ? "groq" : "instant_free";
-  pSel.value = defEngine;
-  sSel.value = "instant_free";
-  if (tSel) tSel.value = defEngine;
 
-  updateModelDropdown("primary");
-  updateModelDropdown("secondary");
-  if (tSel) updateModelDropdown("ticker");
+  slots.forEach(which => {
+    const sel = document.getElementById(which + "EngineSelect");
+    if (!sel) return;
+    const savedEng = state.modelPrefs?.[which + "Engine"];
+    const savedMod = state.modelPrefs?.[which + "Model"];
 
-  const sMod = document.getElementById("secondaryModelSelect");
-  if (sSel.value === "instant_free" && sMod && sMod.options.length > 1) {
-    sMod.selectedIndex = 1;
+    sel.innerHTML = "";
+    for (const [k, v] of Object.entries(ENGINES)) {
+      sel.innerHTML += `<option value="${k}">${v.label}</option>`;
+    }
+
+    const chosenEng = (savedEng && ENGINES[savedEng]) ? savedEng : (which === "secondary" ? "instant_free" : defEngine);
+    sel.value = chosenEng;
+    updateModelDropdown(which, savedMod || "");
+
+    if (!savedMod && which === "secondary") {
+      const sMod = document.getElementById("secondaryModelSelect");
+      if (sMod && sMod.options.length > 1) sMod.selectedIndex = 1;
+    }
+  });
+
+  // Persist initial defaults if this was the very first visit
+  if (!state.modelPrefs?.primaryModel) {
+    saveSelectedModelPrefs(false);
+  } else {
+    refreshActiveModelBadges();
   }
 
   const banner = document.getElementById("missingKeyBanner");
@@ -402,13 +473,29 @@ async function pasteAndAuditOutput(targetId) {
   }
 }
 
-function updateModelDropdown(which) {
-  const eng = document.getElementById(which + "EngineSelect").value;
+function updateModelDropdown(which, preferredModelId = "") {
+  const engEl = document.getElementById(which + "EngineSelect");
   const mSel = document.getElementById(which + "ModelSelect");
+  if (!engEl || !mSel) return;
+  const eng = engEl.value;
+  const targetModel = preferredModelId || state.modelPrefs?.[which + "Model"] || "";
+
   mSel.innerHTML = "";
-  ENGINES[eng].models.forEach(m => {
+  (ENGINES[eng]?.models || []).forEach(m => {
     mSel.innerHTML += `<option value="${m.id}">${m.name}</option>`;
   });
+
+  if (targetModel) {
+    const exists = [...mSel.options].some(o => o.value === targetModel);
+    if (exists) {
+      mSel.value = targetModel;
+    } else if (eng === "openrouter" && targetModel.includes("/")) {
+      // Preserve dynamically fetched OpenRouter model even before live catalog fetch completes
+      mSel.innerHTML = `<option value="${targetModel}">${targetModel}</option>` + mSel.innerHTML;
+      mSel.value = targetModel;
+    }
+  }
+  refreshActiveModelBadges();
 }
 
 function toggleCompareUI() {
@@ -592,7 +679,7 @@ async function callDirectOvhKeylessPool(preferredRoute, promptText) {
       const d = await r.json();
       if (!r.ok) throw new Error(d?.error?.message || d?.message || `OVH HTTP ${r.status}`);
       const txt = stripThinkTagsClient(d?.choices?.[0]?.message?.content);
-      if (txt) return txt;
+      if (txt) return { text: txt, usedEngine: "instant_free", usedModel: route };
     } catch (e) {
       lastErr = e;
     }
@@ -643,7 +730,7 @@ async function callDirectGroqPool(preferredModel, groqKey, promptText) {
     if (!res.ok && res.status === 400) res = await tryOnce(true);
     if (res.ok) {
       const txt = stripThinkTagsClient(res.d?.choices?.[0]?.message?.content);
-      if (txt) return txt;
+      if (txt) return { text: txt, usedEngine: "groq", usedModel: targetModel };
     }
     if (res.status === 401) {
       throw new Error("مفتاح Groq غير صالح. اختر المحرك الأول «🟢 مجاني فوري 100%» أو تحقق من المفتاح.");
@@ -653,9 +740,18 @@ async function callDirectGroqPool(preferredModel, groqKey, promptText) {
   throw lastErr || new Error("تعذر الاتصال بـ Groq");
 }
 
-async function callModel(engine, model, promptText) {
+async function callModel(engine, model, promptText, slotName = "") {
   const apiKey = (state.keys[engine] || "").trim();
   const isStaticHost = typeof location !== "undefined" && (location.hostname.endsWith("github.io") || location.protocol === "file:");
+
+  const finalize = (resultObj) => {
+    const uEng = resultObj.usedEngine || engine;
+    const uMod = resultObj.usedModel || model;
+    if (slotName && (uEng !== engine || uMod !== model)) {
+      adoptReplacementModel(slotName, uEng, uMod);
+    }
+    return stripThinkTagsClient(resultObj.text);
+  };
 
   // 1. Try Vercel Serverless Bridge (/api/ai) when hosted on Vercel
   if (!isStaticHost) {
@@ -669,7 +765,11 @@ async function callModel(engine, model, promptText) {
       if (bridgeRes.status !== 404 && bridgeRes.status !== 405 && bridgeRes.status !== 501 && ct.includes("application/json")) {
         const bridgeData = await bridgeRes.json();
         if (!bridgeRes.ok) throw new Error(bridgeData?.error || "خطأ من الخادم الوسيط");
-        return stripThinkTagsClient(bridgeData.text);
+        return finalize({
+          text: bridgeData.text,
+          usedEngine: bridgeData.usedEngine || engine,
+          usedModel: bridgeData.usedModel || model
+        });
       }
     } catch (bridgeErr) {
       if (bridgeErr.message && !bridgeErr.message.includes("Failed to fetch") && !bridgeErr.message.includes("Load failed") && !bridgeErr.message.includes("NetworkError")) {
@@ -681,10 +781,16 @@ async function callModel(engine, model, promptText) {
   // 2. Direct Browser Execution (works on GitHub Pages & static hosts with full failover!)
   if (engine === "instant_free" || model === "ovh-meta-llama-3.3-70b" || model === "nemotron-550b") {
     try {
-      return await callDirectOvhKeylessPool(model, promptText);
+      const rOvh = await callDirectOvhKeylessPool(model, promptText);
+      const keepGroqLlama = engine === "groq" && model === "ovh-meta-llama-3.3-70b" && rOvh.usedModel === "llama-3.3-70b";
+      return finalize({
+        text: rOvh.text,
+        usedEngine: keepGroqLlama ? "groq" : "instant_free",
+        usedModel: keepGroqLlama ? "ovh-meta-llama-3.3-70b" : rOvh.usedModel
+      });
     } catch (ovhErr) {
       if (state.keys.groq) {
-        return await callDirectGroqPool("openai/gpt-oss-120b", state.keys.groq, promptText);
+        return finalize(await callDirectGroqPool("openai/gpt-oss-120b", state.keys.groq, promptText));
       }
       throw ovhErr;
     }
@@ -696,10 +802,10 @@ async function callModel(engine, model, promptText) {
 
   if (engine === "groq") {
     try {
-      return await callDirectGroqPool(model, apiKey, promptText);
+      return finalize(await callDirectGroqPool(model, apiKey, promptText));
     } catch (groqErr) {
       if (!String(groqErr.message || "").includes("غير صالح")) {
-        return await callDirectOvhKeylessPool("qwen-397b", promptText);
+        return finalize(await callDirectOvhKeylessPool("qwen-397b", promptText));
       }
       throw groqErr;
     }
@@ -720,6 +826,7 @@ async function callModel(engine, model, promptText) {
       const d = await r.json();
       return { ok: r.ok, d };
     }
+    let usedGem = model;
     let res = await directGemini(model, true);
     if (!res.ok && (res.d?.error?.message || "").toLowerCase().includes("thinking")) {
       res = await directGemini(model, false);
@@ -727,11 +834,15 @@ async function callModel(engine, model, promptText) {
     if (!res.ok) {
       const msg = res.d?.error?.message || "";
       const m = msg.match(/models\/(gemini-[a-zA-Z0-9.-]+)/);
-      if (m && m[1] && m[1] !== model) res = await directGemini(m[1], true);
+      if (m && m[1] && m[1] !== model) {
+        res = await directGemini(m[1], true);
+        if (res.ok) usedGem = m[1];
+      }
     }
     if (!res.ok) throw new Error(res.d?.error?.message || "تعذر الاتصال بـ Gemini API");
     const parts = res.d?.candidates?.[0]?.content?.parts || [];
-    return parts.filter(p => !p.thought).map(p => p.text || "").join("").trim();
+    const text = parts.filter(p => !p.thought).map(p => p.text || "").join("").trim();
+    return finalize({ text, usedEngine: "gemini", usedModel: usedGem });
   }
 
   // OpenRouter with fallback to openrouter/free then keyless
@@ -745,10 +856,10 @@ async function callModel(engine, model, promptText) {
     const d = await r.json();
     if (r.ok) {
       const txt = stripThinkTagsClient(d?.choices?.[0]?.message?.content);
-      if (txt) return txt;
+      if (txt) return finalize({ text: txt, usedEngine: "openrouter", usedModel: orMod });
     }
   }
-  return await callDirectOvhKeylessPool("qwen-397b", promptText);
+  return finalize(await callDirectOvhKeylessPool("qwen-397b", promptText));
 }
 
 function cleanAiMetaText(txt) {
@@ -783,7 +894,7 @@ async function runEditorialWorkflow() {
     const prompt = await buildEditorialPrompt(raw);
     if (compareOn) {
       setStatus("statusBar", "statusText", "info", "⏳ جاري تحرير الخبر عبر نموذجين للمقارنة...");
-      const [resA, resB] = await Promise.allSettled([callModel(pEng, pMod, prompt), callModel(sEng, sMod, prompt)]);
+      const [resA, resB] = await Promise.allSettled([callModel(pEng, pMod, prompt, "primary"), callModel(sEng, sMod, prompt, "secondary")]);
       const textA = resA.status === "fulfilled" ? cleanAiMetaText(resA.value) : `⚠️ ${resA.reason?.message}`;
       const textB = resB.status === "fulfilled" ? cleanAiMetaText(resB.value) : `⚠️ ${resB.reason?.message}`;
       document.getElementById("compOutputA").value = textA;
@@ -795,14 +906,16 @@ async function runEditorialWorkflow() {
       runQualityRadar();
       setStatus("statusBar", "statusText", "ok", "✅ اكتملت المقارنة!");
     } else {
-      setStatus("statusBar", "statusText", "info", "⏳ المرحلة 1: جاري صياغة الخبر وفق القالب المعتمد (lvo)...");
-      let draft = cleanAiMetaText(await callModel(pEng, pMod, prompt));
+      setStatus("statusBar", "statusText", "info", "⏳ المرحلة 1: جاري صياغة الخبر بالقالب المعتمد...");
+      let draft = cleanAiMetaText(await callModel(pEng, pMod, prompt, "primary"));
       document.getElementById("editedNewsOutput").value = draft;
       runQualityRadar();
 
       if (twoStageOn && state.selectedFormat !== "proofread") {
-        setStatus("statusBar", "statusText", "info", "🩺 المرحلة 2: المدقق اللغوي يراجع الأرقام بالحروف والمصطلحات والإملاء...");
-        draft = cleanAiMetaText(await callModel(pEng, pMod, buildProofreaderPrompt(raw, draft, "news")));
+        setStatus("statusBar", "statusText", "info", "🩺 المرحلة 2: المراجعة المزدوجة...");
+        const curEng = document.getElementById("primaryEngineSelect").value;
+        const curMod = document.getElementById("primaryModelSelect").value;
+        draft = cleanAiMetaText(await callModel(curEng, curMod, buildProofreaderPrompt(raw, draft, "news"), "primary"));
         document.getElementById("editedNewsOutput").value = draft;
       }
       autoFixArabicErrors("editedNewsOutput", true);
@@ -834,13 +947,15 @@ async function runTickerWorkflow() {
   try {
     setStatus("tickerStatusBar", "tickerStatusText", "info", "⏳ جاري تفكيك النشرة إلى نص شريط إخباري جاهز للنسخ...");
     const prompt = await buildTickerPrompt(raw);
-    let tickerDraft = normalizeTickerLines(cleanAiMetaText(await callModel(pEng, pMod, prompt)));
+    let tickerDraft = normalizeTickerLines(cleanAiMetaText(await callModel(pEng, pMod, prompt, "ticker")));
     document.getElementById("tickerOutput").value = tickerDraft;
     runTickerRadar();
 
     if (twoStage) {
-      setStatus("tickerStatusBar", "tickerStatusText", "info", "🩺 المرحلة 2: التدقيق اللغوي وفحص استقلالية الفقرات والمصطلحات...");
-      tickerDraft = normalizeTickerLines(cleanAiMetaText(await callModel(pEng, pMod, buildProofreaderPrompt(raw, tickerDraft, "ticker"))));
+      setStatus("tickerStatusBar", "tickerStatusText", "info", "🩺 المرحلة 2: المراجعة المزدوجة للشريط...");
+      const curTEng = (document.getElementById("tickerEngineSelect") || document.getElementById("primaryEngineSelect")).value;
+      const curTMod = (document.getElementById("tickerModelSelect") || document.getElementById("primaryModelSelect")).value;
+      tickerDraft = normalizeTickerLines(cleanAiMetaText(await callModel(curTEng, curTMod, buildProofreaderPrompt(raw, tickerDraft, "ticker"), "ticker")));
       document.getElementById("tickerOutput").value = tickerDraft;
     }
     autoFixArabicErrors("tickerOutput", true);
@@ -2128,14 +2243,14 @@ function setupPwaFeatures() {
   // Purge any old v1-v4 PWA caches automatically so updates apply immediately!
   if ("caches" in window) {
     caches.keys().then(keys => {
-      keys.filter(k => k !== "mihbarah-pwa-v27").forEach(k => caches.delete(k));
+      keys.filter(k => k !== "mihbarah-pwa-v28").forEach(k => caches.delete(k));
     }).catch(() => {});
   }
 
   // 1. Register Service Worker
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js?v=27").then(reg => {
+      navigator.serviceWorker.register("sw.js?v=28").then(reg => {
         reg.update().catch(() => {});
       }).catch(() => {});
     });
