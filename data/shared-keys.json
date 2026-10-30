@@ -1,7 +1,7 @@
 {
-  "groq": "",
-  "openrouter": "",
-  "gemini": "",
+  "groq": "v1:3e053e7d44d1ebf6db3c305e7e88a5eb930a296f5cfcf68c8760367e788a80f8f9d9313a75668dbdfaeb223f4f73bfaef7e40b0c6732c9fc",
+  "openrouter": "v1:7946671133c7e282d75f70502b8eb291cd1d",
+  "gemini": "v1:0c401c7c7b9ca2f7e6013540649999dee83b22604988febded604d4549bba3f8dcd74731777db5a7f5c0250a1052afe4e4cf551079",
   "github": "v1:743f0e7128d8e2f8d547025756b8a5ccde5831117ac0e08193633d2f76db94f99fe60230627993b6",
-  "updatedAt": "2026-10-30T00:15:47.628Z"
+  "updatedAt": "2026-10-30T00:19:41.692Z"
 }
