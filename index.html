@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="assets/style.css?v=21" />
+  <link rel="stylesheet" href="assets/style.css?v=22" />
 </head>
 <body>
   <header class="topbar">
@@ -94,7 +94,7 @@
               </div>
               <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text); margin-top:4px;">
                 <input type="checkbox" id="twoStageToggle" checked style="width:16px; height:16px;" />
-                <span>🛡️ <strong>المراجعة المزدوجة التلقائية (مفعّلة ✅):</strong> تمريرة تدقيق ثانية بالذكاء الاصطناعي بعد التحرير لضبط القالب والأرقام بالحروف والمصطلحات</span>
+                <span><strong>المراجعة المزدوجة</strong></span>
               </label>
               <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text); margin-top:4px;">
                 <input type="checkbox" id="compareModeToggle" onchange="toggleCompareUI()" style="width:16px; height:16px;" />
@@ -275,7 +275,7 @@
               </div>
               <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text); margin:0;">
                 <input type="checkbox" id="tickerTwoStage" style="width:16px; height:16px;" />
-                <span>🛡️ <strong>مراجعة مزدوجة إضافية (اختياري):</strong> تمريرة ثانية بالذكاء الاصطناعي (التصحيح المصطلحي يعمل تلقائياً دائماً)</span>
+                <span><strong>المراجعة المزدوجة</strong></span>
               </label>
             </div>
 
@@ -532,6 +532,6 @@
   </div>
 
   <div id="toast" class="toast"></div>
-  <script src="assets/app.js?v=21"></script>
+  <script src="assets/app.js?v=22"></script>
 </body>
 </html>
