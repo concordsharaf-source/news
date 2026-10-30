@@ -96,6 +96,7 @@ let state = {
   localNewsExamples: SafeStorage.get("nr_local_news_ex", []),
   localTickerExamples: SafeStorage.get("nr_local_ticker_ex", []),
   learnedEdits: SafeStorage.get("nr_learned_edits_v2", { news: [], ticker: [] }),
+  deletedRuleIds: SafeStorage.get("nr_deleted_rule_ids_v1", []),
   lastAiNewsDraft: "",
   lastAiTickerDraft: "",
   keys: SafeStorage.get("nr_keys_v1", { groq: "", openrouter: "", gemini: "", github: "" }),
@@ -270,16 +271,18 @@ async function init() {
 
   repoDefaults = { newsRules: nRules, tickerRules: tRules, dictionary: dict, newsIndex: nIdx, tickerIndex: tIdx, learnedEdits: repoLearned };
 
-  // Smart merge: keep user-added local rules AND adopt newly added/updated repo rules!
-  const promotedOldIds = new Set(["rule-1793318458352", "rule-1793319424429"]);
+  // Smart merge: keep user-added local rules AND adopt newly added/updated repo rules (excluding locally deleted/moved IDs)!
+  const promotedOldIds = new Set(["rule-1793318458352", "rule-1793319424429", ...(state.deletedRuleIds || [])]);
   function mergeRulesSmart(repoList, localList) {
-    if (!Array.isArray(localList) || !localList.length) return JSON.parse(JSON.stringify(repoList));
-    const localById = new Map(localList.map(r => [r.id, r]));
-    const repoIds = new Set(repoList.map(r => r.id));
-    // Custom rules added locally by user (always prefixed "rule-<timestamp>") that are not yet in repoList
-    const userOnlyRules = localList.filter(r => /^rule-\d+$/.test(r.id || "") && !repoIds.has(r.id) && !promotedOldIds.has(r.id));
+    const cleanRepo = (repoList || []).filter(r => !promotedOldIds.has(r.id));
+    if (!Array.isArray(localList) || !localList.length) return JSON.parse(JSON.stringify(cleanRepo));
+    const cleanLocal = localList.filter(r => !promotedOldIds.has(r.id));
+    const localById = new Map(cleanLocal.map(r => [r.id, r]));
+    const repoIds = new Set(cleanRepo.map(r => r.id));
+    // Custom rules added locally by user (always prefixed "rule-<timestamp>") that are not yet in cleanRepo
+    const userOnlyRules = cleanLocal.filter(r => /^rule-\d+$/.test(r.id || "") && !repoIds.has(r.id));
     // Repo rules (with latest improved text, preserving user's active on/off toggle if set)
-    const mergedRepo = repoList.map(r => {
+    const mergedRepo = cleanRepo.map(r => {
       const loc = localById.get(r.id);
       const isUserCreatedId = /^rule-\d+$/.test(r.id || "");
       return {
@@ -1081,12 +1084,17 @@ function buildRevisionPrompt(rawText, currentDraft, revisionNote, mode) {
     .map((r, i) => `${i + 1}. ${r.text}`)
     .join("\n");
   const dictRules = state.dictionary
+    .filter(d => !isTicker || !/مئة/.test(d.bad))
     .map(d => `- يُمنع «${d.bad}» ⬅ المعتمد «${d.good}»`)
     .join("\n");
 
   const structureHint = isTicker
     ? "حافظ على صيغة فقرات الشريط الإخباري (كل فقرة مستقلة المعنى في سطر منفصل بدون ترقيم أو نقاط في نهاية السطر)."
     : (FORMAT_INSTRUCTIONS[state.selectedFormat] || FORMAT_INSTRUCTIONS.lvo_standard);
+
+  const numbersAndRulesHeader = isTicker
+    ? "3. التزم في الشريط بكتابة الأرقام بالرموز دائماً (3، 15، 124) مع مسافة قبل الرقم وبعده، والبدء بالفاعل + الفعل المضارع، وبكافة قواعد الشريط المعتمدة (دون خلطها بقواعد الأخبار):"
+    : "3. التزم في الخبر بكتابة جميع الأرقام بالحروف («مائة» ومشتقاتها بالألف دائماً) وبكافة قواعد تحرير الأخبار المعتمدة (دون خلطها بقواعد الشريط):";
 
   return `أنت كبير محرري غرفة أخبار تلفزيونية عربية. لديك ${isTicker ? "شريط إخباري محرر" : "خبر محرر"} جاهز، وطلب رئيس التحرير تعديلاً محدداً عليه.
 
@@ -1097,7 +1105,7 @@ function buildRevisionPrompt(rawText, currentDraft, revisionNote, mode) {
 1. نفّذ التعديل المطلوب أعلاه بدقة كاملة على النص المحرر الحالي.
 2. حافظ تماماً على الهيكل والقالب المعتمد:
 ${structureHint}
-3. التزم بكتابة جميع الأرقام بالحروف («مائة» ومشتقاتها بالألف دائماً) وبكافة القواعد المعتمدة:
+${numbersAndRulesHeader}
 ${activeRules}
 
 قاموس المصطلحات الثابتة الإلزامية:
@@ -1282,26 +1290,32 @@ async function distillAbstractRulesWithAI(mode, comparisonMaterial) {
   const eng = (isTicker ? document.getElementById("tickerEngineSelect")?.value : document.getElementById("primaryEngineSelect")?.value) || "instant_free";
   const mod = (isTicker ? document.getElementById("tickerModelSelect")?.value : document.getElementById("primaryModelSelect")?.value) || "qwen-397b";
 
+  const domainConstraint = isTicker
+    ? "تنبيه فصل صارم: أنت تستخلص قواعد خاصة بقسم (الشريط الإخباري التلفزيوني) حصرياً — وليس تحرير الأخبار المفردة! الشريط يعتمد فقرات قصيرة مستقلة تبدأ بالفاعل + الفعل المضارع، والأرقام بالرموز الرقمية، وحذف النقطة النهائية ورموز الإخراج؛ فلا تستخرج أي قاعدة تخص قوالب الأخبار المفردة."
+    : "تنبيه فصل صارم: أنت تستخلص قواعد خاصة بقسم (تحرير الأخبار المفردة lvo) حصرياً — وليس الشريط الإخباري! تحرير الأخبار يعتمد الأرقام بالحروف الكاملة، والمقدمة الفعلية الحدثية، وفاصل lvo، وصيغ المصادر الصحفية المترابطة؛ فلا تستخرج أي قاعدة تخص الشريط الإخباري التلفزيوني.";
+
   const prompt = `أنت خبير في استخلاص السياسات والأنماط التحريرية لغرف الأخبار.
-ادرس المادة التالية المأخوذة من عمل المحرر في قسم (${isTicker ? "الشريط الإخباري" : "تحرير الأخبار"})، واستخلص منها فقط **النمط والأسلوب والقواعد التحريرية العامة** التي اعتمدها المحرر دون حفظ النص حرفياً:
+ادرس المادة التالية المأخوذة من عمل المحرر في قسم (${isTicker ? "الشريط الإخباري فقط" : "تحرير الأخبار المفردة فقط"})، واستخلص منها فقط **النمط والأسلوب والقواعد التحريرية العامة** الخاصة بهذا القسم وحده دون حفظ النص حرفياً:
+
+${domainConstraint}
 
 ${comparisonMaterial}
 
-<قواعد_موجودة_مسبقاً_تجنب_تكرارها>
+<قواعد_موجودة_مسبقاً_في_هذا_القسم_تجنب_تكرارها>
 ${existingSummary}
-</قواعد_موجودة_مسبقاً_تجنب_تكرارها>
+</قواعد_موجودة_مسبقاً_في_هذا_القسم_تجنب_تكرارها>
 
 شروط صارمة جداً للإخراج:
-1. استخرج من 1 إلى 3 قواعد أسلوبية/تحريرية جديدة ومختصرة جداً (لا تتجاوز كل قاعدة 20 كلمة).
-2. يُمنع منعاً باتاً حفظ النص حرفياً أو ذكر أسماء أشخاص أو مناطق أو أرقام أو وقائع خاصة بالخبر في القاعدة المستخلصة! صغها كقاعدة نمطية عامة ومجردة تصلح لكل الأخبار اللاحقة لتخفيف حجم الأمر على النماذج.
-3. إذا كانت جميع الملاحظات مغطاة حرفياً في القواعد الموجودة مسبقاً، أخرج قاعدة واحدة مكثفة تؤكد أدق فرق أسلوبي لاحظته.
+1. استخرج من 1 إلى 3 قواعد أسلوبية/تحريرية جديدة ومختصرة جداً (لا تتجاوز كل قاعدة 20 كلمة) خاصة بقسم (${isTicker ? "الشريط الإخباري" : "تحرير الأخبار"}) وحده.
+2. يُمنع منعاً باتاً حفظ النص حرفياً أو ذكر أسماء أشخاص أو مناطق أو أرقام أو وقائع خاصة في القاعدة المستخلصة! صغها كقاعدة نمطية عامة ومجردة لتخفيف حجم الأمر على النماذج.
+3. إذا كانت جميع الملاحظات مغطاة حرفياً في القواعد الموجودة مسبقاً، أخرج قاعدة واحدة مكثفة تؤكد أدق فرق أسلوبي لاحظته في هذا القسم.
 4. أخرج القواعد فقط، كل قاعدة في سطر مستقل يبدأ بـ (- ) دون أي عناوين أو مقدمات أو شروحات.`;
 
-  const aiResp = cleanAiMetaText(await callModel(eng, mod, prompt));
+  const aiResp = cleanAiMetaText(await callModel(eng, mod, prompt, isTicker ? "ticker" : "primary"));
   const extracted = aiResp
     .split(/\n+/)
     .map(l => l.replace(/^[\s\-*•\d.)(]+/, "").trim())
-    .filter(l => l.length >= 10 && l.length <= 220 && !/^<?قواعد|^شروط|^المادة/i.test(l))
+    .filter(l => l.length >= 10 && l.length <= 220 && !/^<?قواعد|^شروط|^المادة|^تنبيه/i.test(l))
     .slice(0, 3);
 
   const addedRules = [];
@@ -1311,6 +1325,7 @@ ${existingSummary}
       const ruleObj = {
         id: "rule-" + (Date.now() + idx),
         category: "نمط مستلهم",
+        scope: isTicker ? "ticker" : "news",
         active: true,
         text: ruleText
       };
@@ -1321,13 +1336,7 @@ ${existingSummary}
 
   if (addedRules.length > 0) {
     persistRules();
-    const token = (state.keys.github || "").trim();
-    if (token) {
-      const filePath = isTicker ? "data/ticker-rules.json" : "data/news-rules.json";
-      try {
-        await githubPutFile(token, filePath, targetList, "إضافة قواعد نمط وأسلوب مستلهمة (دون حفظ أمثلة حرفية)");
-      } catch (e) {}
-    }
+    await syncRuleStoreQuietly(isTicker ? "ticker" : "news");
   }
   return addedRules;
 }
@@ -1338,13 +1347,14 @@ function renderDiffLearnBox(mode, newLessons, distilledRules, noChangeDetected) 
   const box = document.getElementById(boxId);
   if (!box) return;
   const bucket = isTicker ? "ticker" : "news";
+  const scopeLabel = isTicker ? "📺 أنماط وقواعد الشريط الإخباري فقط" : "📰 أنماط وقواعد تحرير الأخبار فقط";
 
   let html = `
     <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
       <strong style="font-size:0.9rem; color:var(--ok);">
         ${noChangeDetected
           ? "ℹ️ لم يُرصد فرق جديد بعد — عدّل داخل النص أعلاه ثم اضغط «مقارنة التعديلات»"
-          : `✅ تمت مقارنة تعديلاتك واستلهام النمط التحريري منها دون حفظ النص حرفياً!`}
+          : `✅ تمت مقارنة تعديلاتك وإضافة النمط إلى (${scopeLabel}) دون خلطه بالقسم الآخر!`}
       </strong>
       <button class="btn btn-outline btn-sm" style="padding:3px 9px; font-size:0.76rem;" onclick="hideDiffBox('${bucket}')">✖ إخفاء</button>
     </div>
@@ -1353,7 +1363,7 @@ function renderDiffLearnBox(mode, newLessons, distilledRules, noChangeDetected) 
   if (Array.isArray(distilledRules) && distilledRules.length > 0) {
     html += `
       <div class="diff-card" style="border-color:var(--ok); background:var(--ok-soft);">
-        <div style="font-weight:800; color:var(--ok); margin-bottom:4px;">🧠 القواعد والأنماط الأسلوبية المستلهمة المضافة تلقائياً للسياسة التحريرية:</div>
+        <div style="font-weight:800; color:var(--ok); margin-bottom:4px;">🧠 القواعد المضافة تلقائياً إلى (${scopeLabel}):</div>
         ${distilledRules.map(r => `<div style="margin-top:3px;">• ${escapeHtml(r)}</div>`).join("")}
       </div>
     `;
@@ -1744,14 +1754,19 @@ function switchRuleSub(sub) {
 }
 
 function renderRules() {
-  const list = state.ruleSubTab === "news" ? state.newsRules : state.tickerRules;
+  const isTicker = state.ruleSubTab === "ticker";
+  const list = isTicker ? state.tickerRules : state.newsRules;
   document.getElementById("rulesCountBadge").textContent = state.newsRules.filter(r => r.active).length + state.tickerRules.filter(r => r.active).length;
-  document.getElementById("rulesListContainer").innerHTML = list.length ? list.map((r, idx) => `
+  document.getElementById("rulesListContainer").innerHTML = list.length ? list.map((r, idx) => {
+    const isDistilled = r.category === "نمط مستلهم";
+    const chipClass = isDistilled ? (isTicker ? "chip-ticker" : "chip-news") : "chip-ok";
+    const chipText = isDistilled ? (isTicker ? "📺 نمط مستلهم للشريط" : "📰 نمط مستلهم للأخبار") : r.category;
+    return `
     <div class="item-row" style="opacity:${r.active ? 1 : 0.55}">
       <label style="display:flex; align-items:flex-start; gap:8px; margin:0; color:var(--text); font-weight:600; cursor:pointer; flex:1;">
         <input type="checkbox" ${r.active ? "checked" : ""} onchange="toggleRule(${idx})" style="width:16px; height:16px; margin-top:4px;" />
         <div>
-          ${r.category ? `<span class="chip chip-ok" style="font-size:0.7rem; margin-left:6px;">${escapeHtml(r.category)}</span>` : ""}
+          ${chipText ? `<span class="chip ${chipClass}" style="font-size:0.7rem; margin-left:6px;">${escapeHtml(chipText)}</span>` : ""}
           <span>${escapeHtml(r.text)}</span>
         </div>
       </label>
@@ -1759,13 +1774,37 @@ function renderRules() {
         <button class="btn btn-outline btn-sm" onclick="editRulePrompt(${idx})" title="تعديل نص القاعدة">✏️</button>
         <button class="btn btn-outline btn-sm" onclick="deleteRule(${idx})" title="حذف">🗑️</button>
       </div>
-    </div>`).join("") : `<p class="muted-note">لا توجد قواعد مضافة.</p>`;
+    </div>`;
+  }).join("") : `<p class="muted-note">لا توجد قواعد مضافة.</p>`;
+}
+
+function markRuleDeleted(ruleId) {
+  if (!ruleId) return;
+  if (!Array.isArray(state.deletedRuleIds)) state.deletedRuleIds = [];
+  if (!state.deletedRuleIds.includes(ruleId)) {
+    state.deletedRuleIds.push(ruleId);
+    SafeStorage.set("nr_deleted_rule_ids_v1", state.deletedRuleIds);
+  }
+}
+
+async function syncRuleStoreQuietly(mode) {
+  const token = (state.keys.github || "").trim();
+  if (!token) return;
+  try {
+    if (mode === "news" || mode === "both") {
+      await githubPutFile(token, "data/news-rules.json", state.newsRules, "تحديث قواعد وأنماط تحرير الأخبار");
+    }
+    if (mode === "ticker" || mode === "both") {
+      await githubPutFile(token, "data/ticker-rules.json", state.tickerRules, "تحديث قواعد وأنماط الشريط الإخباري");
+    }
+  } catch (e) {}
 }
 
 function persistRules() {
   SafeStorage.set("nr_rules_override_v2", state.newsRules);
   SafeStorage.set("nr_ticker_rules_override_v2", state.tickerRules);
   renderRules();
+  renderExamples();
 }
 
 function addSingleRule() {
@@ -1807,16 +1846,24 @@ function addBulkRules(replaceExisting) {
 }
 
 function toggleRule(idx) {
-  const t = state.ruleSubTab === "news" ? state.newsRules : state.tickerRules;
-  t[idx].active = !t[idx].active; persistRules();
+  const mode = state.ruleSubTab === "news" ? "news" : "ticker";
+  const t = mode === "news" ? state.newsRules : state.tickerRules;
+  t[idx].active = !t[idx].active;
+  persistRules();
+  syncRuleStoreQuietly(mode);
 }
 function deleteRule(idx) {
-  (state.ruleSubTab === "news" ? state.newsRules : state.tickerRules).splice(idx, 1); persistRules();
+  const mode = state.ruleSubTab === "news" ? "news" : "ticker";
+  const list = mode === "news" ? state.newsRules : state.tickerRules;
+  const removed = list.splice(idx, 1)[0];
+  if (removed?.id) markRuleDeleted(removed.id);
+  persistRules();
+  syncRuleStoreQuietly(mode);
 }
 function resetCurrentRules() {
   if (state.ruleSubTab === "news") { SafeStorage.remove("nr_rules_override_v2"); state.newsRules = JSON.parse(JSON.stringify(repoDefaults.newsRules)); }
   else { SafeStorage.remove("nr_ticker_rules_override_v2"); state.tickerRules = JSON.parse(JSON.stringify(repoDefaults.tickerRules)); }
-  renderRules(); showToast("🔄 استُعيدت قواعد ملفات المستودع");
+  renderRules(); renderExamples(); showToast("🔄 استُعيدت قواعد ملفات المستودع");
 }
 
 // =========================================================================
@@ -1869,50 +1916,182 @@ async function syncToGitHubRepo() {
 }
 
 // =========================================================================
-// Style Distillation & Dictionary UI
+// Style Distillation (Strictly Separated: News vs Ticker) & Dictionary UI
 // =========================================================================
 function switchExSub(sub) {
-  state.exSubTab = sub;
-  document.getElementById("exSubNewsBtn").classList.toggle("active", sub === "news");
-  document.getElementById("exSubTickerBtn").classList.toggle("active", sub === "ticker");
+  const isTicker = sub === "ticker";
+  state.exSubTab = isTicker ? "ticker" : "news";
+  document.getElementById("exSubNewsBtn")?.classList.toggle("active", !isTicker);
+  document.getElementById("exSubTickerBtn")?.classList.toggle("active", isTicker);
+
+  const titleEl = document.getElementById("exFormTitle");
+  const noteEl = document.getElementById("exFormNote");
+  const rawLbl = document.getElementById("exRawLabel");
+  const rawInp = document.getElementById("exRawInput");
+  const edLbl = document.getElementById("exEditedLabel");
+  const edInp = document.getElementById("exEditedInput");
+  const btn = document.getElementById("distillExampleBtn");
+
+  if (isTicker) {
+    if (titleEl) titleEl.textContent = "📺 استلهام النمط والأسلوب للشريط الإخباري فقط";
+    if (noteEl) noteEl.innerHTML = "الصق (نشرة خام + شريطها الإخباري المعتمد)؛ سيستخلص التطبيق منها <strong>قواعد وأسلوب الشريط الإخباري فقط</strong> ويحفظها في سجل الشريط دون مساس بقواعد الأخبار ودون حفظ المثال حرفياً.";
+    if (rawLbl) rawLbl.textContent = "1. النشرة الخام (قبل التفكيك):";
+    if (rawInp) rawInp.placeholder = "الصق النشرة الخام هنا...";
+    if (edLbl) edLbl.textContent = "2. فقرات الشريط الإخباري المعتمدة لديك:";
+    if (edInp) edInp.placeholder = "الصق الشريط المعتمد هنا ليستلهم النموذج أسلوبك الخاص في الشريط فقط...";
+    if (btn) {
+      btn.className = "btn btn-ticker";
+      btn.textContent = "🧠 استلهم النمط وأضفه لقواعد الشريط الإخباري فقط";
+    }
+  } else {
+    if (titleEl) titleEl.textContent = "📰 استلهام النمط والأسلوب لتحرير الأخبار فقط";
+    if (noteEl) noteEl.innerHTML = "الصق (خبراً خاماً + صياغته المحررة المعتمدة)؛ سيستخلص التطبيق منها <strong>قواعد وأسلوب تحرير الأخبار فقط</strong> ويحفظها في سجل الأخبار دون مساس بقواعد الشريط ودون حفظ المثال حرفياً.";
+    if (rawLbl) rawLbl.textContent = "1. الخبر الخام (قبل التحرير):";
+    if (rawInp) rawInp.placeholder = "الصق الخبر الخام هنا...";
+    if (edLbl) edLbl.textContent = "2. الخبر المحرر المعتمد لديك:";
+    if (edInp) edInp.placeholder = "الصق صياغة الخبر المحررة المعتمدة هنا ليستلهم النموذج أسلوبك الخاص في الأخبار فقط...";
+    if (btn) {
+      btn.className = "btn btn-primary";
+      btn.textContent = "🧠 استلهم النمط وأضفه لقواعد الأخبار فقط";
+    }
+  }
   renderExamples();
+}
+
+function renderDistilledSectionHtml(list, mode) {
+  const isTicker = mode === "ticker";
+  if (!list.length) {
+    return `<p class="muted-note" style="margin:4px 0;">${
+      isTicker
+        ? "لا توجد أنماط مستلهمة خاصة بالشريط حالياً — يمكنك استلهام نمط من نشرة أو إضافة قاعدة أسلوبية سريعة للشريط أعلاه."
+        : "لا توجد أنماط مستلهمة خاصة بالأخبار حالياً — يمكنك استلهام نمط من خبر أو إضافة قاعدة أسلوبية سريعة للأخبار أعلاه."
+    }</p>`;
+  }
+
+  const chipClass = isTicker ? "chip-ticker" : "chip-news";
+  const chipLabel = isTicker ? "📺 خاص بالشريط" : "📰 خاص بالأخبار";
+  const moveLabel = isTicker ? "⇄ نقل للأخبار" : "⇄ نقل للشريط";
+  const moveTitle = isTicker ? "نقل هذه القاعدة إلى أنماط الأخبار" : "نقل هذه القاعدة إلى أنماط الشريط";
+
+  return list.map((r) => `
+    <div class="item-row" style="opacity:${r.active ? 1 : 0.55}; padding:9px 11px;">
+      <label style="display:flex; align-items:flex-start; gap:8px; margin:0; color:var(--text); font-weight:600; cursor:pointer; flex:1; min-width:0;">
+        <input type="checkbox" ${r.active ? "checked" : ""} onchange="toggleDistilledRule('${mode}', '${r.id}')" style="width:16px; height:16px; margin-top:4px; flex-shrink:0;" />
+        <div style="min-width:0; word-break:break-word;">
+          <span class="chip ${chipClass}" style="font-size:0.71rem; margin-left:6px;">${chipLabel}</span>
+          <span style="font-size:0.87rem; line-height:1.6;">${escapeHtml(r.text)}</span>
+        </div>
+      </label>
+      <div style="display:flex; gap:4px; flex-wrap:wrap; flex-shrink:0;">
+        <button class="btn btn-outline btn-sm" onclick="moveDistilledRule('${mode}', '${r.id}')" title="${moveTitle}" style="font-size:0.73rem; padding:4px 7px;">${moveLabel}</button>
+        <button class="btn btn-outline btn-sm" onclick="editDistilledRule('${mode}', '${r.id}')" title="تعديل النص" style="padding:4px 7px;">✏️</button>
+        <button class="btn btn-outline btn-sm" onclick="deleteDistilledRule('${mode}', '${r.id}')" title="حذف هذه القاعدة المستلهمة" style="padding:4px 7px;">🗑️</button>
+      </div>
+    </div>`).join("");
 }
 
 function renderExamples() {
   const distilledNews = state.newsRules.filter(r => r.category === "نمط مستلهم");
   const distilledTicker = state.tickerRules.filter(r => r.category === "نمط مستلهم");
-  const badge = document.getElementById("examplesCountBadge");
-  if (badge) badge.textContent = distilledNews.length + distilledTicker.length;
 
-  const list = state.exSubTab === "news" ? distilledNews : distilledTicker;
-  const box = document.getElementById("examplesListContainer");
-  if (!box) return;
-  if (!list.length) {
-    box.innerHTML = `<p class="muted-note">لا توجد أنماط إضافية مستلهمة بعد — الصق أي (خبر خام + خبر محرر) أو (نشرة + شريط) ليستخلص التطبيق منها النمط والأسلوب التحريري فقط في قواعد خفيفة دون حفظ الأمثلة حرفياً.</p>`;
-    return;
-  }
+  const totalBadge = document.getElementById("examplesCountBadge");
+  if (totalBadge) totalBadge.textContent = distilledNews.filter(r => r.active).length + distilledTicker.filter(r => r.active).length;
 
-  box.innerHTML = list.map((r) => `
-    <div class="example-card">
-      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
-        <div style="flex:1;">
-          <span class="chip chip-ok" style="margin-left:6px;">🧠 نمط مستلهم</span>
-          <span style="font-size:0.88rem; line-height:1.6;">${escapeHtml(r.text)}</span>
-        </div>
-        <button class="btn btn-outline btn-sm" onclick="deleteDistilledRule('${r.id}')" title="حذف هذه القاعدة المستلهمة">🗑️</button>
-      </div>
-    </div>`).join("");
+  const newsBadge = document.getElementById("distilledNewsCountBadge");
+  if (newsBadge) newsBadge.textContent = `${distilledNews.filter(r => r.active).length} نشطة`;
+
+  const tickerBadge = document.getElementById("distilledTickerCountBadge");
+  if (tickerBadge) tickerBadge.textContent = `${distilledTicker.filter(r => r.active).length} نشطة`;
+
+  const newsBox = document.getElementById("distilledNewsContainer");
+  if (newsBox) newsBox.innerHTML = renderDistilledSectionHtml(distilledNews, "news");
+
+  const tickerBox = document.getElementById("distilledTickerContainer");
+  if (tickerBox) tickerBox.innerHTML = renderDistilledSectionHtml(distilledTicker, "ticker");
 }
 
-function deleteDistilledRule(ruleId) {
-  if (state.exSubTab === "news") {
-    state.newsRules = state.newsRules.filter(r => r.id !== ruleId);
-  } else {
-    state.tickerRules = state.tickerRules.filter(r => r.id !== ruleId);
+function toggleDistilledRule(mode, ruleId) {
+  const list = mode === "ticker" ? state.tickerRules : state.newsRules;
+  const item = list.find(r => r.id === ruleId);
+  if (!item) return;
+  item.active = !item.active;
+  persistRules();
+  syncRuleStoreQuietly(mode);
+}
+
+function editDistilledRule(mode, ruleId) {
+  const list = mode === "ticker" ? state.tickerRules : state.newsRules;
+  const item = list.find(r => r.id === ruleId);
+  if (!item) return;
+  const updated = window.prompt(
+    mode === "ticker" ? "تعديل قاعدة الشريط المستلهمة:" : "تعديل قاعدة الأخبار المستلهمة:",
+    item.text
+  );
+  if (updated !== null && updated.trim()) {
+    item.text = updated.trim();
+    persistRules();
+    syncRuleStoreQuietly(mode);
+    showToast("✏️ تم تحديث القاعدة الأسلوبية");
+  }
+}
+
+function moveDistilledRule(fromMode, ruleId) {
+  const fromTicker = fromMode === "ticker";
+  const srcList = fromTicker ? state.tickerRules : state.newsRules;
+  const dstList = fromTicker ? state.newsRules : state.tickerRules;
+  const idx = srcList.findIndex(r => r.id === ruleId);
+  if (idx === -1) return;
+  const [moved] = srcList.splice(idx, 1);
+  // Assign a fresh ID in destination and mark old ID deleted so repo smart-merge never duplicates it back into source
+  markRuleDeleted(moved.id);
+  const newRule = {
+    ...moved,
+    id: "rule-" + Date.now(),
+    category: "نمط مستلهم",
+    scope: fromTicker ? "news" : "ticker"
+  };
+  if (!dstList.some(r => r.text.trim() === newRule.text.trim())) {
+    dstList.unshift(newRule);
   }
   persistRules();
-  renderExamples();
+  syncRuleStoreQuietly("both");
+  showToast(fromTicker ? "📰 نُقلت القاعدة إلى أنماط الأخبار فقط" : "📺 نُقلت القاعدة إلى أنماط الشريط فقط");
+}
+
+function deleteDistilledRule(modeOrId, maybeId) {
+  // Backwards-safe signature: deleteDistilledRule(mode, id) or deleteDistilledRule(id)
+  const mode = maybeId ? modeOrId : (state.exSubTab === "ticker" ? "ticker" : "news");
+  const ruleId = maybeId || modeOrId;
+  markRuleDeleted(ruleId);
+  if (mode === "ticker") {
+    state.tickerRules = state.tickerRules.filter(r => r.id !== ruleId);
+  } else {
+    state.newsRules = state.newsRules.filter(r => r.id !== ruleId);
+  }
+  persistRules();
+  syncRuleStoreQuietly(mode);
   showToast("🗑️ حُذفت القاعدة المستلهمة");
+}
+
+function addQuickDistilledRule(mode) {
+  const isTicker = mode === "ticker";
+  const inp = document.getElementById(isTicker ? "quickDistilledTickerInput" : "quickDistilledNewsInput");
+  const txt = (inp?.value || "").trim();
+  if (!txt) return;
+  const targetList = isTicker ? state.tickerRules : state.newsRules;
+  if (!targetList.some(r => r.text.trim() === txt)) {
+    targetList.unshift({
+      id: "rule-" + Date.now(),
+      category: "نمط مستلهم",
+      scope: isTicker ? "ticker" : "news",
+      active: true,
+      text: txt
+    });
+    persistRules();
+    syncRuleStoreQuietly(isTicker ? "ticker" : "news");
+  }
+  inp.value = "";
+  showToast(isTicker ? "✅ أُضيفت القاعدة الأسلوبية إلى قسم الشريط فقط" : "✅ أُضيفت القاعدة الأسلوبية إلى قسم الأخبار فقط");
 }
 
 async function addExamplePair() {
@@ -1920,19 +2099,22 @@ async function addExamplePair() {
   const edited = document.getElementById("exEditedInput").value.trim();
   if (!raw || !edited) { showToast("⚠️ الصق النص الخام والصياغة المعتمدة معاً لاستلهام النمط منهما"); return; }
 
-  const mode = state.exSubTab === "news" ? "news" : "ticker";
+  const mode = state.exSubTab === "ticker" ? "ticker" : "news";
+  const scopeTitle = mode === "ticker" ? "قواعد الشريط الإخباري فقط" : "قواعد تحرير الأخبار فقط";
   const btn = document.getElementById("distillExampleBtn");
   if (btn) btn.disabled = true;
-  showToast("⏳ جاري استلهام النمط والقواعد والأسلوب التحريري فقط دون حفظ المثال حرفياً...");
+  showToast(`⏳ جاري استلهام النمط وإضافته إلى (${scopeTitle}) دون حفظ المثال حرفياً...`);
 
   try {
-    const material = `[النص الخام قبل التحرير]:\n${raw.slice(0, 3500)}\n\n[الصياغة المعتمدة بعد التحرير]:\n${edited.slice(0, 3500)}`;
+    const material = mode === "ticker"
+      ? `[النشرة الخام قبل التفكيك]:\n${raw.slice(0, 3500)}\n\n[الشريط الإخباري المعتمد]:\n${edited.slice(0, 3500)}`
+      : `[الخبر الخام قبل التحرير]:\n${raw.slice(0, 3500)}\n\n[الخبر المحرر المعتمد]:\n${edited.slice(0, 3500)}`;
     const added = await distillAbstractRulesWithAI(mode, material);
     if (document.getElementById("exTitleInput")) document.getElementById("exTitleInput").value = "";
     document.getElementById("exRawInput").value = "";
     document.getElementById("exEditedInput").value = "";
     renderExamples();
-    showToast(`🧠 تم استلهام (${added.length || 1}) قاعدة أسلوبية خفيفة وإضافتها للسياسة التحريرية دون حفظ النص حرفياً!`);
+    showToast(`🧠 تم استلهام (${added.length || 1}) قاعدة أسلوبية وإضافتها إلى (${scopeTitle})!`);
   } catch (err) {
     showToast(`⚠️ تعذر استلهام النمط: ${err.message}`);
   } finally {
@@ -2243,14 +2425,14 @@ function setupPwaFeatures() {
   // Purge any old v1-v4 PWA caches automatically so updates apply immediately!
   if ("caches" in window) {
     caches.keys().then(keys => {
-      keys.filter(k => k !== "mihbarah-pwa-v28").forEach(k => caches.delete(k));
+      keys.filter(k => k !== "mihbarah-pwa-v29").forEach(k => caches.delete(k));
     }).catch(() => {});
   }
 
   // 1. Register Service Worker
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js?v=28").then(reg => {
+      navigator.serviceWorker.register("sw.js?v=29").then(reg => {
         reg.update().catch(() => {});
       }).catch(() => {});
     });

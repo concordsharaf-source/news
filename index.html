@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="assets/style.css?v=28" />
+  <link rel="stylesheet" href="assets/style.css?v=29" />
 </head>
 <body>
   <header class="topbar">
@@ -393,27 +393,51 @@
       </div>
     </section>
 
-    <!-- TAB 4: STYLE DISTILLATION FROM EXAMPLES -->
+    <!-- TAB 4: STYLE DISTILLATION FROM EXAMPLES (STRICTLY SEPARATED: NEWS vs TICKER) -->
     <section id="tab-examples" class="tab-panel">
-      <div class="pills" style="margin-bottom:14px;">
-        <button class="pill active" id="exSubNewsBtn" onclick="switchExSub('news')">📰 استلهام نمط الأخبار</button>
-        <button class="pill" id="exSubTickerBtn" onclick="switchExSub('ticker')">📺 استلهام نمط النشرات والشريط</button>
-      </div>
       <div class="grid-2">
         <div class="card">
-          <h2 class="card-title" style="margin-bottom:8px;">🧠 استلهام النمط والأسلوب التحريري من مثال (دون حفظه حرفياً)</h2>
-          <p class="muted-note">الصق (خبراً خاماً + صياغته المعتمدة) أو (نشرة + شريطاً)؛ سيستخلص التطبيق منها <strong>النمط والقواعد والأسلوب التحريري فقط</strong> في جمل قصيرة خفيفة تضاف للقواعد دون حفظ النصوص حرفياً حتى يظل الأمر خفيفاً وسريعاً على النماذج اللاحقة.</p>
+          <div class="pills" style="margin-bottom:12px;">
+            <button class="pill active" id="exSubNewsBtn" onclick="switchExSub('news')">📰 استلهام نمط للأخبار فقط</button>
+            <button class="pill ticker-pill" id="exSubTickerBtn" onclick="switchExSub('ticker')">📺 استلهام نمط للشريط الإخباري فقط</button>
+          </div>
+          <h2 class="card-title" id="exFormTitle" style="margin-bottom:8px;">📰 استلهام النمط والأسلوب لتحرير الأخبار فقط</h2>
+          <p class="muted-note" id="exFormNote">الصق (خبراً خاماً + صياغته المحررة المعتمدة)؛ سيستخلص التطبيق منها <strong>قواعد وأسلوب تحرير الأخبار فقط</strong> ويحفظها في سجل الأخبار دون مساس بقواعد الشريط ودون حفظ المثال حرفياً.</p>
           <input type="hidden" id="exTitleInput" value="" />
           <div id="exCatWrapper" style="display:none;"><select id="exCategoryInput"><option value="عام">عام</option></select></div>
-          <label id="exRawLabel">1. النص الخام (قبل التحرير):</label>
-          <textarea id="exRawInput" rows="5" placeholder="الصق الخبر الخام أو النشرة الخام هنا..."></textarea>
-          <label id="exEditedLabel" style="margin-top:10px;">2. الصياغة المعتمدة لديك (بعد التحرير):</label>
-          <textarea id="exEditedInput" rows="6" placeholder="الصق الصياغة المحررة أو الشريط المعتمد هنا ليستلهم النموذج أسلوبك ونمطك..."></textarea>
-          <button class="btn btn-primary" id="distillExampleBtn" style="margin-top:12px; width:100%;" onclick="addExamplePair()">🧠 استلهم النمط والأسلوب وأضفه للقواعد (دون حفظ المثال حرفياً)</button>
+          <label id="exRawLabel">1. الخبر الخام (قبل التحرير):</label>
+          <textarea id="exRawInput" rows="5" placeholder="الصق الخبر الخام هنا..."></textarea>
+          <label id="exEditedLabel" style="margin-top:10px;">2. الخبر المحرر المعتمد لديك:</label>
+          <textarea id="exEditedInput" rows="6" placeholder="الصق صياغة الخبر المحررة المعتمدة هنا ليستلهم النموذج أسلوبك الخاص في الأخبار فقط..."></textarea>
+          <button class="btn btn-primary" id="distillExampleBtn" style="margin-top:12px; width:100%;" onclick="addExamplePair()">🧠 استلهم النمط وأضفه لقواعد الأخبار فقط</button>
         </div>
-        <div class="card">
-          <h2 class="card-title" style="margin-bottom:10px;">✨ الأنماط والقواعد الأسلوبية المستلهمة النشطة</h2>
-          <div id="examplesListContainer"></div>
+
+        <div>
+          <div class="card" style="border-right:4px solid var(--primary);">
+            <div class="card-header" style="margin-bottom:6px;">
+              <h2 class="card-title">📰 الأنماط والقواعد المستلهمة — للأخبار فقط</h2>
+              <span class="chip chip-news" id="distilledNewsCountBadge">0</span>
+            </div>
+            <p class="muted-note" style="margin-top:0; margin-bottom:10px;">خاصة بتحرير الأخبار المفردة فقط (الأرقام بالحروف، قالب lvo، صيغ المصادر) — لا تُطبَّق إطلاقاً على الشريط الإخباري.</p>
+            <div style="display:flex; gap:6px; margin-bottom:10px;">
+              <input type="text" id="quickDistilledNewsInput" placeholder="أضف قاعدة أسلوبية سريعة خاصة بالأخبار فقط..." onkeydown="if(event.key==='Enter') addQuickDistilledRule('news')" style="padding:7px 10px; font-size:0.85rem;" />
+              <button class="btn btn-primary btn-sm" onclick="addQuickDistilledRule('news')">➕ إضافة</button>
+            </div>
+            <div id="distilledNewsContainer" style="max-height:360px; overflow-y:auto;"></div>
+          </div>
+
+          <div class="card" style="border-right:4px solid var(--ticker);">
+            <div class="card-header" style="margin-bottom:6px;">
+              <h2 class="card-title">📺 الأنماط والقواعد المستلهمة — للشريط الإخباري فقط</h2>
+              <span class="chip chip-ticker" id="distilledTickerCountBadge">0</span>
+            </div>
+            <p class="muted-note" style="margin-top:0; margin-bottom:10px;">خاصة بتفكيك النشرات والشريط فقط (الفاعل + المضارع، الأرقام بالرموز، الاختزال) — لا تُطبَّق إطلاقاً على تحرير الأخبار.</p>
+            <div style="display:flex; gap:6px; margin-bottom:10px;">
+              <input type="text" id="quickDistilledTickerInput" placeholder="أضف قاعدة أسلوبية سريعة خاصة بالشريط فقط..." onkeydown="if(event.key==='Enter') addQuickDistilledRule('ticker')" style="padding:7px 10px; font-size:0.85rem;" />
+              <button class="btn btn-ticker btn-sm" onclick="addQuickDistilledRule('ticker')">➕ إضافة</button>
+            </div>
+            <div id="distilledTickerContainer" style="max-height:360px; overflow-y:auto;"></div>
+          </div>
         </div>
       </div>
     </section>
@@ -512,6 +536,6 @@
   </div>
 
   <div id="toast" class="toast"></div>
-  <script src="assets/app.js?v=28"></script>
+  <script src="assets/app.js?v=29"></script>
 </body>
 </html>

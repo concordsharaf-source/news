@@ -148,6 +148,9 @@ label { display: block; font-size: 0.82rem; font-weight: 700; margin-bottom: 4px
   background: var(--surface-alt); color: var(--text); font-size: 0.8rem; font-weight: 700; cursor: pointer; font-family: inherit;
 }
 .pill.active { background: var(--primary-soft); color: var(--primary); border-color: var(--primary); }
+.pill.ticker-pill.active { background: var(--ticker-soft); color: var(--ticker); border-color: var(--ticker); }
+.chip-news { background: var(--primary-soft); color: var(--primary); }
+.chip-ticker { background: var(--ticker-soft); color: var(--ticker); }
 .status-bar { padding: 9px 13px; border-radius: 10px; font-size: 0.85rem; font-weight: 600; margin-bottom: 11px; display: none; }
 .status-bar.show { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .status-info { background: var(--accent-soft); color: var(--accent); }
