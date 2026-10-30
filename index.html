@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="assets/style.css?v=20" />
+  <link rel="stylesheet" href="assets/style.css?v=21" />
 </head>
 <body>
   <header class="topbar">
@@ -128,8 +128,6 @@
             <div class="card-header">
               <h2 class="card-title">📰 الخبر المحرر والمدقق النهائي</h2>
               <div style="display:flex; gap:5px; flex-wrap:wrap;">
-                <button class="btn btn-accent btn-sm" onclick="pasteAndAuditOutput('editedNewsOutput')" title="بعد أن يحرر لك Claude أو Copilot أو Meta أو GPT الخبر، اضغط هنا للصقه وتصحيح مصطلحاته وفحصه بضغطة واحدة!">📥 لصق النتيجة + فحص وتصحيح</button>
-                <button class="btn btn-ok btn-sm" onclick="autoFixArabicErrors('editedNewsOutput')">✨ تصحيح المصطلحات بضغطة</button>
                 <button class="btn btn-primary btn-sm" onclick="copyOutput('editedNewsOutput')">📋 نسخ للنشر</button>
               </div>
             </div>
@@ -298,8 +296,6 @@
               <h2 class="card-title">📄 نص الشريط الإخباري الجاهز للنسخ</h2>
               <div style="display:flex; gap:5px; flex-wrap:wrap;">
                 <button class="btn btn-ticker btn-sm" onclick="copyFormattedTicker()">📋 نسخ نص الشريط</button>
-                <button class="btn btn-accent btn-sm" onclick="pasteAndAuditOutput('tickerOutput')">📥 لصق النتيجة + فحص</button>
-                <button class="btn btn-ok btn-sm" onclick="autoFixArabicErrors('tickerOutput')">✨ تصحيح المصطلحات</button>
                 <button class="btn btn-outline btn-sm" onclick="downloadTickerTxt()">⬇️ ملف .txt</button>
               </div>
             </div>

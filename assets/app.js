@@ -2034,7 +2034,7 @@ function setupPwaFeatures() {
   // Purge any old v1-v4 PWA caches automatically so updates apply immediately!
   if ("caches" in window) {
     caches.keys().then(keys => {
-      keys.filter(k => k !== "mihbarah-pwa-v20").forEach(k => caches.delete(k));
+      keys.filter(k => k !== "mihbarah-pwa-v21").forEach(k => caches.delete(k));
     }).catch(() => {});
   }
 
