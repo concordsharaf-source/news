@@ -32,12 +32,12 @@ const ENGINES = {
     ]
   },
   groq: {
-    label: "⚡ Groq المجاني (يشغّل Meta Llama 4 و GPT-120B — 1,000 طلب/يوم بدون بطاقة ✅)",
+    label: "⚡ Groq المجاني السريع (GPT-120B و Qwen 3.8 و Meta Llama — بدون بطاقة ✅)",
     models: [
-      { id: "meta-llama/llama-4-scout-17b-16e-instruct", name: "Meta Llama 4 Scout (الجيل الرابع من ميتا — 1,000 طلب/يوم مجاناً)" },
-      { id: "llama-3.3-70b-versatile", name: "Meta Llama 3.3 70B Versatile (1,000 طلب/يوم مجاناً)" },
-      { id: "openai/gpt-oss-120b", name: "OpenAI GPT-OSS 120B (1,000 طلب/يوم مجاناً)" },
-      { id: "qwen/qwen3.8-27b", name: "Qwen 3.8 27B" }
+      { id: "openai/gpt-oss-120b", name: "OpenAI GPT-OSS 120B (النموذج الرئيسي المعتمد على Groq — 1,000 طلب/يوم مجاناً ✅)" },
+      { id: "qwen/qwen3.8-27b", name: "Qwen 3.8 27B (دقة عربية عالية — 1,000 طلب/يوم مجاناً ✅)" },
+      { id: "openai/gpt-oss-20b", name: "OpenAI GPT-OSS 20B (فائق السرعة 1000 كلمة/ثانية — 1,000 طلب/يوم مجاناً ✅)" },
+      { id: "ovh-meta-llama-3.3-70b", name: "Meta Llama 3.3 70B Instruct (عبر خادم ميتا المفتوح المباشر ✅)" }
     ]
   },
   openrouter: {
@@ -1874,14 +1874,14 @@ function setupPwaFeatures() {
   // Purge any old v1-v4 PWA caches automatically so updates apply immediately!
   if ("caches" in window) {
     caches.keys().then(keys => {
-      keys.filter(k => k !== "mihbarah-pwa-v16").forEach(k => caches.delete(k));
+      keys.filter(k => k !== "mihbarah-pwa-v17").forEach(k => caches.delete(k));
     }).catch(() => {});
   }
 
   // 1. Register Service Worker
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js?v=16").then(reg => {
+      navigator.serviceWorker.register("sw.js?v=17").then(reg => {
         reg.update().catch(() => {});
       }).catch(() => {});
     });
