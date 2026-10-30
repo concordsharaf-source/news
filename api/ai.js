@@ -134,7 +134,7 @@ export default async function handler(req, res) {
     // =====================================================================
     // 1. INSTANT FREE (100% Keyless, Zero Account, Zero Credit Card!)
     // =====================================================================
-    if (!engine || engine === "instant_free" || model === "ovh-meta-llama-3.3-70b" || String(model || "").includes("nvidia")) {
+    if (!engine || engine === "instant_free" || model === "ovh-meta-llama-3.3-70b" || model === "nemotron-550b") {
       const targetRoute = model === "ovh-meta-llama-3.3-70b" ? "llama-3.3-70b" : (model || "qwen-397b");
       const resKeyless = await tryAllKeylessRoutes(targetRoute, prompt);
       if (resKeyless.ok) {
@@ -279,7 +279,7 @@ export default async function handler(req, res) {
     // 4. OpenRouter Free API (with automatic fallback to keyless 397B pool if overloaded)
     // =====================================================================
     if (engine === "openrouter") {
-      const orCandidates = [model, "openrouter/free"].filter((v, i, arr) => v && !v.includes("nvidia") && arr.indexOf(v) === i);
+      const orCandidates = [model, "openrouter/free"].filter((v, i, arr) => v && arr.indexOf(v) === i);
       let lastOrErr = "";
       for (const orModel of orCandidates) {
         const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {

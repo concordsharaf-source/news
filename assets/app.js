@@ -42,10 +42,20 @@ const ENGINES = {
     ]
   },
   openrouter: {
-    label: "🔀 OpenRouter المجاني (بمفتاح مجاني بدون بطاقة ✅)",
+    label: "🔀 OpenRouter المجاني (جميع النماذج المجانية المتاحة :free — يتحدث تلقائياً ✅)",
     models: [
-      { id: "openrouter/free", name: "الموجّه التلقائي المجاني السريع (:free)" },
-      { id: "google/gemma-4-26b-a4b-it:free", name: "Gemma 4 26B (:free)" }
+      { id: "openrouter/free", name: "Free Models Router — الموجّه التلقائي لأفضل نموذج مجاني متاح (:free)" },
+      { id: "thinkingmachines/inkling:free", name: "Thinking Machines: Inkling 1M (:free)" },
+      { id: "thinkingmachines/inkling-small:free", name: "Thinking Machines: Inkling Small 1M (:free)" },
+      { id: "google/gemma-4-31b-it:free", name: "Google: Gemma 4 31B (:free)" },
+      { id: "google/gemma-4-26b-a4b-it:free", name: "Google: Gemma 4 26B A4B (:free)" },
+      { id: "nvidia/nemotron-3.5-super-vl:free", name: "NVIDIA: Nemotron 3.5 Super (:free)" },
+      { id: "nvidia/nemotron-3.5-lightning:free", name: "NVIDIA: Nemotron 3.5 Lightning (:free)" },
+      { id: "dots-studio/dots-3-note-preview:free", name: "Dots Studio: Dots 3 Note 512K (:free)" },
+      { id: "xingchen-agi/xing4.0-29b-a4b:free", name: "XingChen: Xing 4.0 29B (:free)" },
+      { id: "recursive/flint-v1.0:free", name: "Recursive: Flint v1.0 (:free)" },
+      { id: "poolside/laguna-s-2.1:free", name: "Poolside: Laguna S 2.1 (:free)" },
+      { id: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", name: "NVIDIA: Nemotron 3 Nano 30B (:free)" }
     ]
   },
   gemini: {
@@ -295,6 +305,40 @@ async function init() {
   renderDictionary();
   runQualityRadar();
   runTickerRadar();
+  refreshLiveOpenRouterFreeModels();
+}
+
+async function refreshLiveOpenRouterFreeModels() {
+  try {
+    const r = await fetch("https://openrouter.ai/api/v1/models");
+    if (!r.ok) return;
+    const j = await r.json();
+    const skipPattern = /lyria|content-safety|guard|embed|whisper|tts/i;
+    const freeModels = (j.data || []).filter(m => {
+      const p = m.pricing || {};
+      return m.id && String(p.prompt) === "0" && String(p.completion) === "0" && !skipPattern.test(m.id);
+    });
+    if (freeModels.length < 3) return;
+
+    const routerFirst = [
+      { id: "openrouter/free", name: "Free Models Router — الموجّه التلقائي لأفضل نموذج مجاني (:free)" },
+      ...freeModels
+        .filter(m => m.id !== "openrouter/free")
+        .map(m => ({ id: m.id, name: `${m.name || m.id}` }))
+    ];
+    ENGINES.openrouter.models = routerFirst;
+
+    // Refresh any dropdown currently showing openrouter while preserving selection
+    ["primary", "secondary", "ticker"].forEach(which => {
+      const engEl = document.getElementById(which + "EngineSelect");
+      const modEl = document.getElementById(which + "ModelSelect");
+      if (engEl && modEl && engEl.value === "openrouter") {
+        const prev = modEl.value;
+        updateModelDropdown(which);
+        if ([...modEl.options].some(o => o.value === prev)) modEl.value = prev;
+      }
+    });
+  } catch (e) {}
 }
 
 function populateEngineSelectors() {
@@ -635,7 +679,7 @@ async function callModel(engine, model, promptText) {
   }
 
   // 2. Direct Browser Execution (works on GitHub Pages & static hosts with full failover!)
-  if (engine === "instant_free" || model === "ovh-meta-llama-3.3-70b" || String(model || "").includes("nvidia")) {
+  if (engine === "instant_free" || model === "ovh-meta-llama-3.3-70b" || model === "nemotron-550b") {
     try {
       return await callDirectOvhKeylessPool(model, promptText);
     } catch (ovhErr) {
@@ -691,7 +735,7 @@ async function callModel(engine, model, promptText) {
   }
 
   // OpenRouter with fallback to openrouter/free then keyless
-  const orModels = [model, "openrouter/free"].filter((v, i, a) => v && !v.includes("nvidia") && a.indexOf(v) === i);
+  const orModels = [model, "openrouter/free"].filter((v, i, a) => v && a.indexOf(v) === i);
   for (const orMod of orModels) {
     const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -2084,14 +2128,14 @@ function setupPwaFeatures() {
   // Purge any old v1-v4 PWA caches automatically so updates apply immediately!
   if ("caches" in window) {
     caches.keys().then(keys => {
-      keys.filter(k => k !== "mihbarah-pwa-v25").forEach(k => caches.delete(k));
+      keys.filter(k => k !== "mihbarah-pwa-v26").forEach(k => caches.delete(k));
     }).catch(() => {});
   }
 
   // 1. Register Service Worker
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js?v=25").then(reg => {
+      navigator.serviceWorker.register("sw.js?v=26").then(reg => {
         reg.update().catch(() => {});
       }).catch(() => {});
     });
