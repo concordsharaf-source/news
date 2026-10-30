@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="assets/style.css?v=23" />
+  <link rel="stylesheet" href="assets/style.css?v=24" />
 </head>
 <body>
   <header class="topbar">
@@ -477,7 +477,7 @@
         <div class="radar-box" style="margin-bottom:14px; border: 2px solid var(--ok); background: var(--ok-soft);">
           <h3 style="margin:0 0 6px; font-size:0.98rem; color: var(--ok);">🟢 لا تحتاج إلى أي مفتاح أو اشتراك للبدء!</h3>
           <p class="muted-note" style="margin:0; color:var(--text);">
-            يعمل الموقع الآن افتراضياً بمحرك <strong>«🟢 مجاني فوري 100% بدون مفتاح»</strong> المدمج في خادم Vercel (يشغّل نموذج <strong>NVIDIA Nemotron 3 Ultra 550B</strong> ونموذج <strong>OpenAI GPT-OSS 120B</strong> مع تبديل تلقائي ذكي)، بالإضافة إلى زر <strong>«🏆 نسخ + فتح Arena.ai»</strong> لاستخدام <strong>Claude و GPT</strong> الأصليين مجاناً. المفاتيح أدناه اختيارية تماماً لمن يرغب بإضافة حسابه الشخصي.
+            يعمل الموقع الآن افتراضياً بمحرك <strong>«🟢 مجاني فوري 100% بدون مفتاح»</strong> المدمج في خادم Vercel (يشغّل نموذج <strong>Qwen 3.5 Flagship 397B</strong> ونموذج <strong>OpenAI GPT-OSS 120B</strong> ونموذج <strong>Meta Llama 3.3 70B</strong> مع تبديل تلقائي فوري). المفاتيح أدناه اختيارية لمن يرغب بإضافة حسابه.
           </p>
         </div>
 
@@ -492,7 +492,7 @@
           </div>
 
           <div class="radar-box" style="margin-top:0;">
-            <h3 style="margin:0 0 6px; font-size:0.96rem;">2️⃣ مفتاح OpenRouter المجاني (اختياري — Nemotron 550B و Gemma 4)</h3>
+            <h3 style="margin:0 0 6px; font-size:0.96rem;">2️⃣ مفتاح OpenRouter المجاني (اختياري)</h3>
             <p class="muted-note">من: <a href="https://openrouter.ai/keys" target="_blank" rel="noopener" style="color:var(--primary); font-weight:bold;">openrouter.ai/keys</a></p>
             <input type="password" id="openrouterKeyInput" placeholder="sk-or-..." oninput="saveApiKeys()" />
           </div>
@@ -526,6 +526,6 @@
   </div>
 
   <div id="toast" class="toast"></div>
-  <script src="assets/app.js?v=23"></script>
+  <script src="assets/app.js?v=24"></script>
 </body>
 </html>

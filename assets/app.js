@@ -24,10 +24,11 @@ const SafeStorage = {
 
 const ENGINES = {
   instant_free: {
-    label: "🟢 مجاني فوري 100% (يعمل مباشرة بدون أي مفتاح أو تسجيل أو اشتراك ✅)",
+    label: "🟢 مجاني فوري 100% (يعمل مباشرة بدون أي مفتاح أو تسجيل ✅)",
     models: [
-      { id: "nemotron-550b", name: "NVIDIA Nemotron 3 Ultra 550B (صياغة صحفية احترافية — بدون مفتاح ✅)" },
-      { id: "gpt-oss-120b", name: "OpenAI GPT-OSS 120B (سريع جداً ~10 ثوانٍ — بدون مفتاح ✅)" },
+      { id: "qwen-397b", name: "Qwen 3.5 Flagship 397B (الأقوى عربياً — فوري بدون مفتاح ✅)" },
+      { id: "gpt-oss-120b", name: "OpenAI GPT-OSS 120B (سريع جداً — فوري بدون مفتاح ✅)" },
+      { id: "qwen-3.8-27b", name: "Qwen 3.8 27B (الجيل الأحدث — فوري بدون مفتاح ✅)" },
       { id: "llama-3.3-70b", name: "Meta Llama 3.3 70B Instruct (نموذج ميتا الضخم — فوري بدون مفتاح ✅)" }
     ]
   },
@@ -43,9 +44,8 @@ const ENGINES = {
   openrouter: {
     label: "🔀 OpenRouter المجاني (بمفتاح مجاني بدون بطاقة ✅)",
     models: [
-      { id: "nvidia/nemotron-3-ultra-550b-a55b:free", name: "Nemotron 3 Ultra 550B (:free)" },
-      { id: "google/gemma-4-31b-it:free", name: "Gemma 4 31B (:free)" },
-      { id: "openrouter/free", name: "الموجّه التلقائي المجاني" }
+      { id: "openrouter/free", name: "الموجّه التلقائي المجاني السريع (:free)" },
+      { id: "google/gemma-4-26b-a4b-it:free", name: "Gemma 4 26B (:free)" }
     ]
   },
   gemini: {
@@ -2034,14 +2034,14 @@ function setupPwaFeatures() {
   // Purge any old v1-v4 PWA caches automatically so updates apply immediately!
   if ("caches" in window) {
     caches.keys().then(keys => {
-      keys.filter(k => k !== "mihbarah-pwa-v23").forEach(k => caches.delete(k));
+      keys.filter(k => k !== "mihbarah-pwa-v24").forEach(k => caches.delete(k));
     }).catch(() => {});
   }
 
   // 1. Register Service Worker
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js?v=23").then(reg => {
+      navigator.serviceWorker.register("sw.js?v=24").then(reg => {
         reg.update().catch(() => {});
       }).catch(() => {});
     });

@@ -1,7 +1,7 @@
 // Vercel Serverless AI Proxy (Runs on US servers — works in Yemen without VPN!)
 // Supports:
-// 1. instant_free (100% keyless, zero signup, zero credit card — Nemotron 550B + OpenAI GPT-OSS 120B + Meta Llama 3.3 70B with automatic failover!)
-// 2. Optional user keys: groq (auto-failover across GPT-OSS 120B, Qwen 3.8 27B, GPT-OSS 20B + retired Llama ID remapping), openrouter, gemini
+// 1. instant_free (100% keyless, zero signup, zero credit card — Qwen 397B + OpenAI GPT-OSS 120B + Qwen 3.8 27B + Meta Llama 3.3 70B with sub-second response & automatic failover!)
+// 2. Optional user keys: groq, openrouter, gemini
 
 import fs from "node:fs";
 
@@ -44,77 +44,66 @@ function stripThinkTags(txt) {
 }
 
 async function callKeylessRoute(route, prompt) {
-  if (route === "nemotron-550b") {
-    const r = await fetch("https://api.kilo.ai/api/gateway/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": "Bearer anonymous",
-        "Content-Type": "application/json",
-        "User-Agent": "MihbarahNewsroom/10.0"
-      },
-      body: JSON.stringify({
-        model: "nvidia/nemotron-3-ultra-550b-a55b:free",
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.1,
-        max_tokens: 8192
-      }),
-      signal: AbortSignal.timeout(45000)
-    });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d?.error?.message || `Kilo HTTP ${r.status}`);
-    const text = stripThinkTags(d?.choices?.[0]?.message?.content);
-    if (!text) throw new Error("Empty response from Nemotron-550B");
-    return text;
-  }
+  const endpoint = "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions";
+  let payload;
 
-  if (route === "gpt-oss-120b") {
-    const r = await fetch("https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "User-Agent": "MihbarahNewsroom/10.0"
-      },
-      body: JSON.stringify({
-        model: "gpt-oss-120b",
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.1,
-        max_tokens: 8192,
-        reasoning_effort: "low"
-      }),
-      signal: AbortSignal.timeout(38000)
-    });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d?.error?.message || `OVH HTTP ${r.status}`);
-    const text = stripThinkTags(d?.choices?.[0]?.message?.content);
-    if (!text) throw new Error("Empty response from GPT-OSS-120B");
-    return text;
-  }
-
-  // Meta-Llama-3_3-70B-Instruct on OVHcloud keyless
-  const r = await fetch("https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "User-Agent": "MihbarahNewsroom/10.0"
-    },
-    body: JSON.stringify({
+  if (route === "qwen-397b") {
+    payload = {
+      model: "Qwen3.5-397B-A17B",
+      reasoning_effort: "none",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.1,
+      max_tokens: 8192
+    };
+  } else if (route === "gpt-oss-120b") {
+    payload = {
+      model: "gpt-oss-120b",
+      reasoning_effort: "low",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.1,
+      max_tokens: 8192
+    };
+  } else if (route === "qwen-3.8-27b") {
+    payload = {
+      model: "Qwen3.8-27B",
+      reasoning_effort: "none",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.1,
+      max_tokens: 8192
+    };
+  } else {
+    // llama-3.3-70b
+    payload = {
       model: "Meta-Llama-3_3-70B-Instruct",
       messages: [{ role: "user", content: prompt }],
       temperature: 0.1,
       max_tokens: 8192
-    }),
-    signal: AbortSignal.timeout(32000)
+    };
+  }
+
+  const r = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "User-Agent": "MihbarahNewsroom/11.0"
+    },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(25000)
   });
   const d = await r.json();
-  if (!r.ok) throw new Error(d?.error?.message || `OVH Llama HTTP ${r.status}`);
+  if (!r.ok) throw new Error(d?.error?.message || d?.message || `OVH HTTP ${r.status}`);
   const text = stripThinkTags(d?.choices?.[0]?.message?.content);
-  if (!text) throw new Error("Empty response from Llama-3.3-70B");
+  if (!text) throw new Error(`Empty response from ${route}`);
   return text;
 }
 
 async function tryAllKeylessRoutes(preferred, prompt) {
-  const allRoutes = ["nemotron-550b", "gpt-oss-120b", "llama-3.3-70b"];
-  const start = allRoutes.includes(preferred) ? preferred : "nemotron-550b";
+  const allRoutes = ["qwen-397b", "gpt-oss-120b", "qwen-3.8-27b", "llama-3.3-70b"];
+  // Remap deprecated/overloaded Nvidia Nemotron ID seamlessly to flagship Qwen 397B
+  const mapped = (!preferred || preferred === "nemotron-550b" || String(preferred).includes("nvidia"))
+    ? "qwen-397b"
+    : preferred;
+  const start = allRoutes.includes(mapped) ? mapped : "qwen-397b";
   const ordered = [start, ...allRoutes.filter(x => x !== start)];
   let lastErr = null;
   for (const route of ordered) {
@@ -145,15 +134,15 @@ export default async function handler(req, res) {
     // =====================================================================
     // 1. INSTANT FREE (100% Keyless, Zero Account, Zero Credit Card!)
     // =====================================================================
-    if (!engine || engine === "instant_free" || model === "ovh-meta-llama-3.3-70b") {
-      const targetRoute = model === "ovh-meta-llama-3.3-70b" ? "llama-3.3-70b" : (model || "nemotron-550b");
+    if (!engine || engine === "instant_free" || model === "ovh-meta-llama-3.3-70b" || String(model || "").includes("nvidia")) {
+      const targetRoute = model === "ovh-meta-llama-3.3-70b" ? "llama-3.3-70b" : (model || "qwen-397b");
       const resKeyless = await tryAllKeylessRoutes(targetRoute, prompt);
       if (resKeyless.ok) {
         return res.status(200).json({ text: resKeyless.text, usedRoute: resKeyless.usedRoute });
       }
       if (!engine || engine === "instant_free") {
         return res.status(502).json({
-          error: `جميع المحركات الفورية مشغولة حالياً (${resKeyless.error}). أعد المحاولة بعد ثوانٍ أو استخدم زر Arena.ai.`
+          error: `جميع المحركات الفورية مشغولة حالياً (${resKeyless.error}). أعد المحاولة بعد ثوانٍ.`
         });
       }
     }
@@ -168,7 +157,7 @@ export default async function handler(req, res) {
 
     if (!effectiveKey) {
       return res.status(400).json({
-        error: `لم يتم إدخال مفتاح ${engine.toUpperCase()} بعد. اختر المحرك الأول «🟢 مجاني فوري بدون مفتاح» للتحرير المباشر بدون أي اشتراك أو مفتاح!`
+        error: `لم يتم إدخال مفتاح ${engine.toUpperCase()} بعد. اختر المحرك الأول «🟢 مجاني فوري 100%» للتحرير المباشر بدون أي مفتاح!`
       });
     }
 
@@ -218,7 +207,7 @@ export default async function handler(req, res) {
     }
 
     // =====================================================================
-    // 3. Groq API (Active Oct 2026 Free Tier + Auto-Remap Retired Llama IDs + Failover!)
+    // 3. Groq API (Active Oct 2026 Free Tier + Auto-Remap + Failover!)
     // =====================================================================
     if (engine === "groq") {
       const retiredToActive = {
@@ -255,7 +244,7 @@ export default async function handler(req, res) {
             "Content-Type": "application/json"
           },
           body: JSON.stringify(payload),
-          signal: AbortSignal.timeout(35000)
+          signal: AbortSignal.timeout(30000)
         });
         const d = await r.json();
         return { ok: r.ok, status: r.status, data: d };
@@ -265,7 +254,6 @@ export default async function handler(req, res) {
       for (const candidate of candidates) {
         let resGroq = await callSingleGroq(candidate, false);
         if (!resGroq.ok && resGroq.status === 400) {
-          // Retry without optional reasoning params if schema changed
           resGroq = await callSingleGroq(candidate, true);
         }
         if (resGroq.ok) {
@@ -280,8 +268,7 @@ export default async function handler(req, res) {
         lastGroqErr = resGroq.data?.error?.message || `Groq HTTP ${resGroq.status}`;
       }
 
-      // Ultimate safety net: if all Groq models hit temporary 429 TPM rate limits, complete seamlessly via keyless route!
-      const backup = await tryAllKeylessRoutes("llama-3.3-70b", prompt);
+      const backup = await tryAllKeylessRoutes("qwen-397b", prompt);
       if (backup.ok) {
         return res.status(200).json({ text: backup.text, usedRoute: backup.usedRoute });
       }
@@ -289,10 +276,10 @@ export default async function handler(req, res) {
     }
 
     // =====================================================================
-    // 4. OpenRouter Free API (with automatic fallback to openrouter/free)
+    // 4. OpenRouter Free API (with automatic fallback to keyless 397B pool if overloaded)
     // =====================================================================
     if (engine === "openrouter") {
-      const orCandidates = [model, "openrouter/free"].filter((v, i, arr) => v && arr.indexOf(v) === i);
+      const orCandidates = [model, "openrouter/free"].filter((v, i, arr) => v && !v.includes("nvidia") && arr.indexOf(v) === i);
       let lastOrErr = "";
       for (const orModel of orCandidates) {
         const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -308,7 +295,7 @@ export default async function handler(req, res) {
             messages: [{ role: "user", content: prompt }],
             temperature: 0.1
           }),
-          signal: AbortSignal.timeout(42000)
+          signal: AbortSignal.timeout(25000)
         });
         const d = await r.json();
         if (r.ok) {
@@ -319,6 +306,10 @@ export default async function handler(req, res) {
           return res.status(401).json({ error: "مفتاح OpenRouter غير صالح." });
         }
         lastOrErr = d?.error?.message || d?.message || `OpenRouter HTTP ${r.status}`;
+      }
+      const backup = await tryAllKeylessRoutes("qwen-397b", prompt);
+      if (backup.ok) {
+        return res.status(200).json({ text: backup.text, usedRoute: backup.usedRoute });
       }
       return res.status(502).json({ error: lastOrErr || "خطأ من خادم OpenRouter" });
     }
