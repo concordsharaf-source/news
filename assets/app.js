@@ -2041,7 +2041,7 @@ function setupPwaFeatures() {
   // 1. Register Service Worker
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js?v=20").then(reg => {
+      navigator.serviceWorker.register("sw.js?v=21").then(reg => {
         reg.update().catch(() => {});
       }).catch(() => {});
     });
