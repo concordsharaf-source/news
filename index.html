@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="assets/style.css?v=17" />
+  <link rel="stylesheet" href="assets/style.css?v=18" />
 </head>
 <body>
   <header class="topbar">
@@ -517,10 +517,19 @@
     <!-- TAB 6: ENGINES & GITHUB DIRECT SYNC -->
     <section id="tab-engines" class="tab-panel">
       <div class="card">
-        <h2 class="card-title" style="margin-bottom:8px;">⚡ إعداد المحركات المجانية + مزامنة GitHub المباشرة</h2>
-        <p class="muted-note" style="margin-bottom:16px;">
-          جميع المفاتيح تحفظ محلياً في متصفحك أنت فقط ولا تُرسل إلى الكود العام أبداً.
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
+          <h2 class="card-title" style="margin:0;">⚡ إعداد المحركات المجانية + حفظ المفاتيح لكل الأجهزة</h2>
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            <button class="btn btn-ok btn-sm" onclick="saveAndSyncKeysEverywhere(false)">💾☁️ حفظ المفاتيح في الصفحة لكل أجهزتي</button>
+            <button class="btn btn-outline btn-sm" onclick="toggleKeysVisibility()">👁️ إظهار / إخفاء المفاتيح</button>
+          </div>
+        </div>
+        <p class="muted-note" style="margin-bottom:10px;">
+          تُشفَّر جميع المفاتيح تلقائياً وتُحفظ داخل ملف مشترك في الصفحة؛ بمجرد فتح الموقع من الكمبيوتر أو أي هاتف آخر ستجد جميع مفاتيحك وتوكن GitHub محمّلة وجاهزة للعمل فوراً دون البحث عنها من جديد.
         </p>
+        <div id="keysVaultStatus" class="radar-box" style="margin-top:0; margin-bottom:14px; font-weight:700; font-size:0.86rem; color:var(--ok);">
+          ⏳ جاري التحقق من المفاتيح المحفوظة في الصفحة...
+        </div>
 
         <div class="radar-box" style="margin-bottom:14px; border: 2px solid var(--ok); background: var(--ok-soft);">
           <h3 style="margin:0 0 6px; font-size:0.98rem; color: var(--ok);">🟢 لا تحتاج إلى أي مفتاح أو اشتراك للبدء!</h3>
@@ -574,6 +583,6 @@
   </div>
 
   <div id="toast" class="toast"></div>
-  <script src="assets/app.js?v=17"></script>
+  <script src="assets/app.js?v=18"></script>
 </body>
 </html>

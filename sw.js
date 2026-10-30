@@ -1,4 +1,4 @@
-const CACHE_VERSION = "mihbarah-pwa-v17";
+const CACHE_VERSION = "mihbarah-pwa-v18";
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -13,6 +13,7 @@ const APP_SHELL = [
   "/data/ticker-rules.json",
   "/data/dictionary.json",
   "/data/learned-edits.json",
+  "/data/shared-keys.json",
   "/data/news-examples/index.json",
   "/data/news-examples/example-01.json",
   "/data/ticker-examples/index.json",

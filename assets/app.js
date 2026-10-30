@@ -105,6 +105,81 @@ async function fetchJsonSafe(path, fallback) {
   }
 }
 
+const VAULT_SALT = "MihbarahNewsroomVault2026!#Yemen";
+function encodeVaultValue(plain) {
+  const s = String(plain || "").trim();
+  if (!s) return "";
+  const rev = s.split("").reverse().join("");
+  let hex = "";
+  for (let i = 0; i < rev.length; i++) {
+    const code = rev.charCodeAt(i) ^ VAULT_SALT.charCodeAt(i % VAULT_SALT.length) ^ ((i * 31) & 0xff);
+    hex += (code & 0xff).toString(16).padStart(2, "0");
+  }
+  return "v1:" + hex;
+}
+function decodeVaultValue(enc) {
+  const raw = String(enc || "").trim();
+  if (!raw) return "";
+  if (!raw.startsWith("v1:")) return raw;
+  const hex = raw.slice(3);
+  const chars = [];
+  for (let i = 0; i + 1 < hex.length; i += 2) {
+    const idx = i / 2;
+    const byte = parseInt(hex.slice(i, i + 2), 16);
+    const orig = byte ^ VAULT_SALT.charCodeAt(idx % VAULT_SALT.length) ^ ((idx * 31) & 0xff);
+    chars.push(String.fromCharCode(orig));
+  }
+  return chars.reverse().join("");
+}
+function buildEncodedVaultObject(keysObj) {
+  return {
+    groq: encodeVaultValue(keysObj?.groq),
+    openrouter: encodeVaultValue(keysObj?.openrouter),
+    gemini: encodeVaultValue(keysObj?.gemini),
+    github: encodeVaultValue(keysObj?.github),
+    updatedAt: new Date().toISOString()
+  };
+}
+function decodeVaultObject(vaultObj) {
+  if (!vaultObj || typeof vaultObj !== "object") return { groq: "", openrouter: "", gemini: "", github: "" };
+  return {
+    groq: decodeVaultValue(vaultObj.groq),
+    openrouter: decodeVaultValue(vaultObj.openrouter),
+    gemini: decodeVaultValue(vaultObj.gemini),
+    github: decodeVaultValue(vaultObj.github)
+  };
+}
+async function fetchLiveSharedVault(optionalToken) {
+  // 1) Try GitHub Contents API first for zero-delay cross-device sync (instant even before Vercel rebuilds!)
+  try {
+    const headers = { "Accept": "application/vnd.github+json" };
+    if (optionalToken) headers["Authorization"] = `Bearer ${optionalToken}`;
+    const ghRes = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/data/shared-keys.json?t=${Date.now()}`, { headers });
+    if (ghRes.ok) {
+      const meta = await ghRes.json();
+      if (meta && meta.content) {
+        const decodedJson = JSON.parse(decodeURIComponent(escape(atob(meta.content.replace(/\s+/g, "")))));
+        return decodeVaultObject(decodedJson);
+      }
+    }
+  } catch (e) {}
+  // 2) Fallback to static file in repo/PWA cache
+  const localVault = await fetchJsonSafe(`data/shared-keys.json?t=${Date.now()}`, null) || await fetchJsonSafe("data/shared-keys.json", null);
+  return decodeVaultObject(localVault);
+}
+function updateKeysVaultStatusBadge() {
+  const el = document.getElementById("keysVaultStatus");
+  if (!el) return;
+  const active = [];
+  if (state.keys.groq) active.push("Groq ✅");
+  if (state.keys.gemini) active.push("Gemini ✅");
+  if (state.keys.openrouter) active.push("OpenRouter ✅");
+  if (state.keys.github) active.push("مزامنة GitHub ✅");
+  el.textContent = active.length
+    ? `☁️ المفاتيح المحفوظة والنشطة عبر جميع أجهزتك الآن: ${active.join(" | ")}`
+    : "ℹ️ لم يُحفظ مفتاح إضافي بعد (يعمل المحرك الفوري بدون مفتاح افتراضياً)";
+}
+
 async function loadExampleDetail(item) {
   if (item.raw && item.edited) return item;
   if (!item.file) return null;
@@ -119,21 +194,57 @@ async function init() {
     document.documentElement.setAttribute("data-theme", "dark");
     document.getElementById("themeBtn").textContent = "☀️ نهاري";
   }
-  document.getElementById("geminiKeyInput").value = state.keys.gemini || "";
-  document.getElementById("groqKeyInput").value = state.keys.groq || "";
-  document.getElementById("openrouterKeyInput").value = state.keys.openrouter || "";
-  document.getElementById("githubTokenInput").value = state.keys.github || "";
 
+  // Load local browser keys first, then merge with shared repo vault so ANY PC/phone gets all saved keys automatically!
+  const localInitialKeys = {
+    groq: (state.keys.groq || "").trim(),
+    openrouter: (state.keys.openrouter || "").trim(),
+    gemini: (state.keys.gemini || "").trim(),
+    github: (state.keys.github || "").trim()
+  };
+
+  document.getElementById("geminiKeyInput").value = localInitialKeys.gemini;
+  document.getElementById("groqKeyInput").value = localInitialKeys.groq;
+  document.getElementById("openrouterKeyInput").value = localInitialKeys.openrouter;
+  document.getElementById("githubTokenInput").value = localInitialKeys.github;
   populateEngineSelectors();
+  updateKeysVaultStatusBadge();
 
-  const [nRules, tRules, dict, nIdx, tIdx, repoLearned] = await Promise.all([
+  const [nRules, tRules, dict, nIdx, tIdx, repoLearned, remoteVaultKeys] = await Promise.all([
     fetchJsonSafe("data/news-rules.json", []),
     fetchJsonSafe("data/ticker-rules.json", []),
     fetchJsonSafe("data/dictionary.json", []),
     fetchJsonSafe("data/news-examples/index.json", []),
     fetchJsonSafe("data/ticker-examples/index.json", []),
-    fetchJsonSafe("data/learned-edits.json", { news: [], ticker: [] })
+    fetchJsonSafe("data/learned-edits.json", { news: [], ticker: [] }),
+    fetchLiveSharedVault(localInitialKeys.github)
   ]);
+
+  // Merge shared vault keys + local keys:
+  // - Cloud vault wins when populated (so updating a key on PC updates Phone too!)
+  // - Local browser key fills in whenever cloud slot is still empty, then auto-uploads once!
+  state.keys = {
+    groq: remoteVaultKeys.groq || localInitialKeys.groq || "",
+    openrouter: remoteVaultKeys.openrouter || localInitialKeys.openrouter || "",
+    gemini: remoteVaultKeys.gemini || localInitialKeys.gemini || "",
+    github: remoteVaultKeys.github || localInitialKeys.github || ""
+  };
+  SafeStorage.set("nr_keys_v1", state.keys);
+  document.getElementById("geminiKeyInput").value = state.keys.gemini;
+  document.getElementById("groqKeyInput").value = state.keys.groq;
+  document.getElementById("openrouterKeyInput").value = state.keys.openrouter;
+  document.getElementById("githubTokenInput").value = state.keys.github;
+  populateEngineSelectors();
+  updateKeysVaultStatusBadge();
+
+  // If this device already has a local key (e.g. Groq/Gemini/OpenRouter) while the cloud slot is empty, auto-upload it immediately!
+  const hasUnsyncedLocalKey =
+    (localInitialKeys.groq && !remoteVaultKeys.groq) ||
+    (localInitialKeys.openrouter && !remoteVaultKeys.openrouter) ||
+    (localInitialKeys.gemini && !remoteVaultKeys.gemini);
+  if (hasUnsyncedLocalKey && state.keys.github) {
+    saveAndSyncKeysEverywhere(true);
+  }
 
   repoDefaults = { newsRules: nRules, tickerRules: tRules, dictionary: dict, newsIndex: nIdx, tickerIndex: tIdx, learnedEdits: repoLearned };
 
@@ -1504,6 +1615,7 @@ async function syncToGitHubRepo() {
     await githubPutFile(token, "data/ticker-rules.json", state.tickerRules, "تحديث قواعد الشريط الإخباري");
     await githubPutFile(token, "data/dictionary.json", state.dictionary, "تحديث قاموس المصطلحات الثابتة");
     await githubPutFile(token, "data/learned-edits.json", state.learnedEdits || { news: [], ticker: [] }, "تحديث التعديلات المتعلَّمة");
+    await githubPutFile(token, "data/shared-keys.json", buildEncodedVaultObject(state.keys), "مزامنة مفاتيح الصفحة المشفرة لكل الأجهزة");
 
     // Promote any local examples into their own separate JSON files in GitHub!
     if (state.localNewsExamples.length > 0) {
@@ -1805,6 +1917,7 @@ function adoptComparison(which) {
   hideDiffBox("news");
   runQualityRadar();
 }
+let keysAutoSyncTimer = null;
 function saveApiKeys() {
   state.keys = {
     groq: document.getElementById("groqKeyInput").value.trim(),
@@ -1812,7 +1925,50 @@ function saveApiKeys() {
     gemini: document.getElementById("geminiKeyInput").value.trim(),
     github: document.getElementById("githubTokenInput").value.trim()
   };
-  SafeStorage.set("nr_keys_v1", state.keys); populateEngineSelectors();
+  SafeStorage.set("nr_keys_v1", state.keys);
+  populateEngineSelectors();
+  updateKeysVaultStatusBadge();
+
+  if (keysAutoSyncTimer) clearTimeout(keysAutoSyncTimer);
+  if (state.keys.github) {
+    keysAutoSyncTimer = setTimeout(() => {
+      saveAndSyncKeysEverywhere(true);
+    }, 1500);
+  }
+}
+
+async function saveAndSyncKeysEverywhere(silent = false) {
+  state.keys = {
+    groq: document.getElementById("groqKeyInput").value.trim(),
+    openrouter: document.getElementById("openrouterKeyInput").value.trim(),
+    gemini: document.getElementById("geminiKeyInput").value.trim(),
+    github: document.getElementById("githubTokenInput").value.trim()
+  };
+  SafeStorage.set("nr_keys_v1", state.keys);
+  populateEngineSelectors();
+  updateKeysVaultStatusBadge();
+
+  const token = state.keys.github;
+  if (!token) {
+    if (!silent) showToast("⚠️ أدخل توكن GitHub في الخانة 4 ليتم حفظ المفاتيح في الصفحة لكل أجهزتك");
+    return;
+  }
+  try {
+    await githubPutFile(token, "data/shared-keys.json", buildEncodedVaultObject(state.keys), "حفظ ومزامنة المفاتيح المشفرة لجميع الأجهزة");
+    if (!silent) showToast("☁️✅ تم حفظ المفاتيح في الصفحة! ستعمل تلقائياً عند فتحها من أي كمبيوتر أو جوال آخر");
+    else showToast("☁️ تمت مزامنة مفاتيحك تلقائياً في الصفحة لتعمل على جميع أجهزتك!");
+  } catch (e) {
+    if (!silent) showToast(`⚠️ تعذرت مزامنة المفاتيح سحابياً: ${e.message}`);
+  }
+}
+
+function toggleKeysVisibility() {
+  const ids = ["groqKeyInput", "openrouterKeyInput", "geminiKeyInput", "githubTokenInput"];
+  const makeText = document.getElementById("groqKeyInput")?.type === "password";
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.type = makeText ? "text" : "password";
+  });
 }
 function switchTab(name, btnEl) {
   document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
@@ -1874,14 +2030,14 @@ function setupPwaFeatures() {
   // Purge any old v1-v4 PWA caches automatically so updates apply immediately!
   if ("caches" in window) {
     caches.keys().then(keys => {
-      keys.filter(k => k !== "mihbarah-pwa-v17").forEach(k => caches.delete(k));
+      keys.filter(k => k !== "mihbarah-pwa-v18").forEach(k => caches.delete(k));
     }).catch(() => {});
   }
 
   // 1. Register Service Worker
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js?v=17").then(reg => {
+      navigator.serviceWorker.register("sw.js?v=18").then(reg => {
         reg.update().catch(() => {});
       }).catch(() => {});
     });

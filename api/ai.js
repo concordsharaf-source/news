@@ -3,9 +3,41 @@
 // 1. instant_free (100% keyless, zero signup, zero credit card — Nemotron 550B + OpenAI GPT-OSS 120B + Meta Llama 3.3 70B with automatic failover!)
 // 2. Optional user keys: groq (auto-failover across GPT-OSS 120B, Qwen 3.8 27B, GPT-OSS 20B + retired Llama ID remapping), openrouter, gemini
 
+import fs from "node:fs";
+
 export const config = {
   maxDuration: 60
 };
+
+const VAULT_SALT = "MihbarahNewsroomVault2026!#Yemen";
+function decodeVaultValue(enc) {
+  const raw = String(enc || "").trim();
+  if (!raw) return "";
+  if (!raw.startsWith("v1:")) return raw;
+  const hex = raw.slice(3);
+  const chars = [];
+  for (let i = 0; i + 1 < hex.length; i += 2) {
+    const idx = i / 2;
+    const byte = parseInt(hex.slice(i, i + 2), 16);
+    const orig = byte ^ VAULT_SALT.charCodeAt(idx % VAULT_SALT.length) ^ ((idx * 31) & 0xff);
+    chars.push(String.fromCharCode(orig));
+  }
+  return chars.reverse().join("");
+}
+
+function readSharedVaultKeys() {
+  try {
+    const raw = fs.readFileSync(new URL("../data/shared-keys.json", import.meta.url), "utf8");
+    const parsed = JSON.parse(raw);
+    return {
+      groq: decodeVaultValue(parsed.groq),
+      openrouter: decodeVaultValue(parsed.openrouter),
+      gemini: decodeVaultValue(parsed.gemini)
+    };
+  } catch (e) {
+    return { groq: "", openrouter: "", gemini: "" };
+  }
+}
 
 function stripThinkTags(txt) {
   return String(txt || "").replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
@@ -126,10 +158,11 @@ export default async function handler(req, res) {
       }
     }
 
+    const vaultKeys = readSharedVaultKeys();
     const envKeys = {
-      gemini: process.env.GEMINI_API_KEY || "",
-      groq: process.env.GROQ_API_KEY || "",
-      openrouter: process.env.OPENROUTER_API_KEY || ""
+      gemini: process.env.GEMINI_API_KEY || vaultKeys.gemini || "",
+      groq: process.env.GROQ_API_KEY || vaultKeys.groq || "",
+      openrouter: process.env.OPENROUTER_API_KEY || vaultKeys.openrouter || ""
     };
     const effectiveKey = (apiKey || envKeys[engine] || "").trim();
 
