@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="assets/style.css?v=24" />
+  <link rel="stylesheet" href="assets/style.css?v=25" />
 </head>
 <body>
   <header class="topbar">
@@ -29,7 +29,7 @@
         <button class="tab-btn active" onclick="switchTab('editor', this)">📰 تحرير خبر</button>
         <button class="tab-btn ticker-tab" onclick="switchTab('ticker', this)">📺 النشرة ⬅ شريط إخباري</button>
         <button class="tab-btn" onclick="switchTab('rules', this)">📜 القواعد (+ إضافة تباعاً) <span class="badge" id="rulesCountBadge">0</span></button>
-        <button class="tab-btn" onclick="switchTab('examples', this)">🎯 بنك الأمثلة <span class="badge" id="examplesCountBadge">0</span></button>
+        <button class="tab-btn" onclick="switchTab('examples', this)">🧠 استلهام النمط <span class="badge" id="examplesCountBadge">0</span></button>
         <button class="tab-btn" onclick="switchTab('dictionary', this)">🔎 القاموس والمصطلحات</button>
         <button class="tab-btn" onclick="switchTab('engines', this)">⚡ الربط والمزامنة</button>
       </nav>
@@ -158,7 +158,7 @@
                 <button class="btn btn-primary btn-sm" onclick="copyOutput('editedNewsOutput')">📋 نسخ الخبر</button>
                 <button class="btn btn-ok btn-sm" onclick="saveManualEditsForLearning('news')" title="يقارن نص النموذج بتعديلاتك اليدوية ويعرض الفروق ويحفظها ليستفيد منها النموذج لاحقاً">🔍 مقارنة التعديلات والاستفادة منها لاحقاً</button>
                 <button class="btn btn-outline btn-sm" onclick="sendEditedNewsToTicker()">📺 أرسل للشريط الإخباري</button>
-                <button class="btn btn-warn btn-sm" onclick="saveCurrentNewsAsExample()">⭐ حفظ كمثال معتمد</button>
+                <button class="btn btn-warn btn-sm" onclick="saveCurrentNewsAsExample()" title="يستلهم النمط والأسلوب التحريري فقط من هذا الخبر دون حفظه حرفياً">🧠 استلهام النمط</button>
               </div>
             </div>
 
@@ -392,41 +392,26 @@
       </div>
     </section>
 
-    <!-- TAB 4: EXAMPLES -->
+    <!-- TAB 4: STYLE DISTILLATION FROM EXAMPLES -->
     <section id="tab-examples" class="tab-panel">
       <div class="pills" style="margin-bottom:14px;">
-        <button class="pill active" id="exSubNewsBtn" onclick="switchExSub('news')">📰 أمثلة الأخبار (data/news-examples/)</button>
-        <button class="pill" id="exSubTickerBtn" onclick="switchExSub('ticker')">📺 أمثلة النشرات والشريط (data/ticker-examples/)</button>
+        <button class="pill active" id="exSubNewsBtn" onclick="switchExSub('news')">📰 استلهام نمط الأخبار</button>
+        <button class="pill" id="exSubTickerBtn" onclick="switchExSub('ticker')">📺 استلهام نمط النشرات والشريط</button>
       </div>
       <div class="grid-2">
         <div class="card">
-          <h2 class="card-title" style="margin-bottom:8px;">🎯 إضافة نموذج تدريبي جديد (خام ⬅ معتمد)</h2>
-          <p class="muted-note">كل مثال تضيفه يمكن حفظه في متصفحك أو رفعه كملف JSON منفصل تلقائياً في مستودعك عبر زر «☁️ حفظ في GitHub»!</p>
-          <div class="row-2" style="margin-bottom:10px;">
-            <div>
-              <label>عنوان المثال:</label>
-              <input type="text" id="exTitleInput" placeholder="مثال: خبر ميداني غزة مع lvo" />
-            </div>
-            <div id="exCatWrapper">
-              <label>الجبهة / التصنيف:</label>
-              <select id="exCategoryInput">
-                <option value="عام">عام</option>
-                <option value="غزة">قطاع غزة</option>
-                <option value="الضفة">الضفة الغربية</option>
-                <option value="لبنان">جنوب لبنان</option>
-                <option value="ميداني">ميداني</option>
-                <option value="سياسي">سياسي ودولي</option>
-              </select>
-            </div>
-          </div>
+          <h2 class="card-title" style="margin-bottom:8px;">🧠 استلهام النمط والأسلوب التحريري من مثال (دون حفظه حرفياً)</h2>
+          <p class="muted-note">الصق (خبراً خاماً + صياغته المعتمدة) أو (نشرة + شريطاً)؛ سيستخلص التطبيق منها <strong>النمط والقواعد والأسلوب التحريري فقط</strong> في جمل قصيرة خفيفة تضاف للقواعد دون حفظ النصوص حرفياً حتى يظل الأمر خفيفاً وسريعاً على النماذج اللاحقة.</p>
+          <input type="hidden" id="exTitleInput" value="" />
+          <div id="exCatWrapper" style="display:none;"><select id="exCategoryInput"><option value="عام">عام</option></select></div>
           <label id="exRawLabel">1. النص الخام (قبل التحرير):</label>
-          <textarea id="exRawInput" rows="5"></textarea>
+          <textarea id="exRawInput" rows="5" placeholder="الصق الخبر الخام أو النشرة الخام هنا..."></textarea>
           <label id="exEditedLabel" style="margin-top:10px;">2. الصياغة المعتمدة لديك (بعد التحرير):</label>
-          <textarea id="exEditedInput" rows="6"></textarea>
-          <button class="btn btn-primary" style="margin-top:12px; width:100%;" onclick="addExamplePair()">💾 حفظ المثال</button>
+          <textarea id="exEditedInput" rows="6" placeholder="الصق الصياغة المحررة أو الشريط المعتمد هنا ليستلهم النموذج أسلوبك ونمطك..."></textarea>
+          <button class="btn btn-primary" id="distillExampleBtn" style="margin-top:12px; width:100%;" onclick="addExamplePair()">🧠 استلهم النمط والأسلوب وأضفه للقواعد (دون حفظ المثال حرفياً)</button>
         </div>
         <div class="card">
-          <h2 class="card-title" style="margin-bottom:10px;">📚 فهرس الأمثلة المنفصلة (تُحمَّل عند الطلب لمنع البطء)</h2>
+          <h2 class="card-title" style="margin-bottom:10px;">✨ الأنماط والقواعد الأسلوبية المستلهمة النشطة</h2>
           <div id="examplesListContainer"></div>
         </div>
       </div>
@@ -526,6 +511,6 @@
   </div>
 
   <div id="toast" class="toast"></div>
-  <script src="assets/app.js?v=24"></script>
+  <script src="assets/app.js?v=25"></script>
 </body>
 </html>

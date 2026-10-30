@@ -85,7 +85,7 @@ let state = {
   dictionary: [],
   localNewsExamples: SafeStorage.get("nr_local_news_ex", []),
   localTickerExamples: SafeStorage.get("nr_local_ticker_ex", []),
-  learnedEdits: SafeStorage.get("nr_learned_edits_v1", { news: [], ticker: [] }),
+  learnedEdits: SafeStorage.get("nr_learned_edits_v2", { news: [], ticker: [] }),
   lastAiNewsDraft: "",
   lastAiTickerDraft: "",
   keys: SafeStorage.get("nr_keys_v1", { groq: "", openrouter: "", gemini: "", github: "" }),
@@ -249,12 +249,13 @@ async function init() {
   repoDefaults = { newsRules: nRules, tickerRules: tRules, dictionary: dict, newsIndex: nIdx, tickerIndex: tIdx, learnedEdits: repoLearned };
 
   // Smart merge: keep user-added local rules AND adopt newly added/updated repo rules!
+  const promotedOldIds = new Set(["rule-1793318458352", "rule-1793319424429"]);
   function mergeRulesSmart(repoList, localList) {
     if (!Array.isArray(localList) || !localList.length) return JSON.parse(JSON.stringify(repoList));
     const localById = new Map(localList.map(r => [r.id, r]));
     const repoIds = new Set(repoList.map(r => r.id));
     // Custom rules added locally by user (always prefixed "rule-<timestamp>") that are not yet in repoList
-    const userOnlyRules = localList.filter(r => /^rule-\d+$/.test(r.id || "") && !repoIds.has(r.id));
+    const userOnlyRules = localList.filter(r => /^rule-\d+$/.test(r.id || "") && !repoIds.has(r.id) && !promotedOldIds.has(r.id));
     // Repo rules (with latest improved text, preserving user's active on/off toggle if set)
     const mergedRepo = repoList.map(r => {
       const loc = localById.get(r.id);
@@ -282,24 +283,12 @@ async function init() {
   state.newsRules = mergeRulesSmart(nRules, localNewsOverride);
   state.tickerRules = mergeRulesSmart(tRules, localTickerOverride);
   state.dictionary = mergeDictSmart(dict, localDictOverride);
-  // Merge learned edits from repo + local browser
-  const mergeLearnedList = (rArr = [], lArr = []) => {
-    const seen = new Set();
-    return [...lArr, ...rArr].filter(it => {
-      const k = `${it.before || ""}->${it.after || ""}`;
-      if (!it.after || seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    }).slice(0, 25);
-  };
-  state.learnedEdits = {
-    news: mergeLearnedList(repoLearned?.news, state.learnedEdits?.news),
-    ticker: mergeLearnedList(repoLearned?.ticker, state.learnedEdits?.ticker)
-  };
+  state.learnedEdits = { news: [], ticker: [] };
+  SafeStorage.remove("nr_learned_edits_v1");
   SafeStorage.set("nr_rules_override_v2", state.newsRules);
   SafeStorage.set("nr_ticker_rules_override_v2", state.tickerRules);
   SafeStorage.set("nr_dict_override_v2", state.dictionary);
-  SafeStorage.set("nr_learned_edits_v1", state.learnedEdits);
+  SafeStorage.set("nr_learned_edits_v2", state.learnedEdits);
 
   renderRules();
   renderExamples();
@@ -412,42 +401,27 @@ async function buildEditorialPrompt(rawText) {
       ? "الضفة"
       : (/لبنان|بيروت|البقاع|النبطية|صور|بنت جبيل/.test(rawText) ? "لبنان" : "all"));
   const extraNote = (document.getElementById("extraNote")?.value || "").trim();
-  const chosenExamples = await getRelevantNewsExamples(cat, 3);
 
   const rulesBlock = activeRules.map((r, i) => `${i + 1}. ${r.text}`).join("\n");
-  const dictBlock = state.dictionary.slice(0, 35).map(d => `- يُمنع «${d.bad}» والصواب المعتمد «${d.good}»`).join("\n");
-  const examplesBlock = chosenExamples.map((ex, idx) =>
-    `<مثال_${idx + 1}>\n[الخبر الخام]:\n${ex.raw}\n\n[الصياغة المحررة المعتمدة لدينا]:\n${ex.edited}\n</مثال_${idx + 1}>`
-  ).join("\n\n");
-  const learnedNewsBlock = (state.learnedEdits?.news || []).slice(0, 12).map(it =>
-    it.before
-      ? `- تجنّب صياغة: «${it.before}» ⬅ واعتمد أسلوب المحرر: «${it.after}»`
-      : `- صياغة معتمدة من المحرر: «${it.after}»`
-  ).join("\n");
+  const dictBlock = state.dictionary.slice(0, 35).map(d => `«${d.bad}» ⬅ «${d.good}»`).join(" | ");
 
   let frontHint = "";
-  if (cat === "غزة") frontHint = "تنبيه جبهة غزة: التزم تسمية «قوات العدو الصهيوني»، و«استشهاد» بدل «مقتل»، ووصف العدوان بـ «حرب الإبادة الصهيونية»، ووقف إطلاق النار بـ «هدنة هشة»، و«فلسطيني» بدل «مواطن».";
-  if (cat === "الضفة") frontHint = "تنبيه جبهة الضفة الغربية: التزم تسمية «قوات الاحتلال الصهيوني»، و«استشهاد» بدل «مقتل»، ويُمنع ذكر أسماء المعتقلين نهائياً، واستخدم «فلسطيني» بدل «مواطن»، و«مداهمة» بدل «دهم».";
+  if (cat === "غزة") frontHint = "- تنبيه جبهة غزة: التزم تسمية «قوات العدو الصهيوني»، و«استشهاد» بدل «مقتل»، ووصف العدوان بـ «حرب الإبادة الصهيونية»، ووقف إطلاق النار بـ «هدنة هشة»، و«فلسطيني» بدل «مواطن».";
+  if (cat === "الضفة") frontHint = "- تنبيه جبهة الضفة الغربية: التزم تسمية «قوات الاحتلال الصهيوني»، و«استشهاد» بدل «مقتل»، ويُمنع ذكر أسماء المعتقلين نهائياً، واستخدم «فلسطيني» بدل «مواطن»، و«مداهمة» بدل «دهم».";
 
   return `أنت رئيس ديسك تحرير إخباري ومدقق لغوي عربي محترف وصارم جداً.
-إعادة صياغة <الخبر_الخام_الجديد> صحفياً (لا تنقله حرفياً) وفق <قواعد_التحرير_الإلزامية> و<قالب_المخرج_المطلوب> بدقة كاملة دون شرح أو ملاحظات أو عناوين إضافية، ودون إضافة أي معلومات غير موجودة في النص الأصلي.
+أعد صياغة <الخبر_الخام_الجديد> صحفياً (لا تنقله حرفياً) وفق <قواعد_التحرير_الإلزامية> و<قالب_المخرج_المطلوب> بدقة كاملة دون شرح أو ملاحظات أو عناوين إضافية، ودون إضافة أي معلومات غير موجودة في النص الأصلي.
 
 <قواعد_التحرير_الإلزامية>
 ${rulesBlock}
 </قواعد_التحرير_الإلزامية>
 
-<قائمة_المصطلحات_الثابتة_وقواعد_الاختصار>
-${dictBlock}
+<المصطلحات_الثابتة_والاختصار>
+- البدائل المعتمدة: ${dictBlock}
 ${frontHint}
-- تذكير حاسم بالأرقام: اكتب الأرقام بالحروف داخل الخبر دائماً، واكتب (مائة، ثلاثمائة، أربعمائة، خمسمائة، ستمائة، سبعمائة، ثمانمائة، تسعمائة) بالألف دائماً.
-- تذكير حاسم بالحذف والمنع: احذف جميع التواريخ والأيام والساعات والروابط وأسماء الوكالات والمراسلين واسم المصدر الأصلي للخبر، ولا تستخدم (اليوم، أمس، الليلة الماضية، الأسبوع الماضي) بل استخدم (في وقت سابق، خلال الساعات الماضية، منذ بدء العدوان)، ولا تستخدم الأشهر السريانية أو الاتجاهات الجغرافية المركبة.
-- تذكير حاسم بالاختصار: احذف أي خلفيات تاريخية أو سياسية طويلة، واحتفظ فقط بأهم الوقائع المرتبطة مباشرة بالحدث، ولا تكرر المعلومة نفسها بصيغ مختلفة، ولا تستخدم عبارات تفسيرية أو إنشائية أو تحليلية.
-</قائمة_المصطلحات_الثابتة_وقواعد_الاختصار>
-
-${learnedNewsBlock ? `<تعديلات_يدوية_سابقة_للمحرر_يجب_التعلم_منها>\n${learnedNewsBlock}\n</تعديلات_يدوية_سابقة_للمحرر_يجب_التعلم_منها>\n\n` : ""}${examplesBlock ? `<الأمثلة_المرجعية_لتعلّم_الأسلوب_والقالب_فقط>
-تنبيه حاسم: هذه الأمثلة لتعلّم القالب والأسلوب فقط؛ إياك أن تنقل منها أي واقعة أو حصيلة إلى خبر اليوم!
-${examplesBlock}
-</الأمثلة_المرجعية_لتعلّم_الأسلوب_والقالب_فقط>` : ""}
+- الأرقام بالحروف داخل الخبر دائماً، وكتابة (مائة، ثلاثمائة... تسعمائة) بالألف دائماً.
+- احذف التواريخ والأيام والساعات والروابط وأسماء الوكالات والمراسلين واسم المصدر الأصلي، ويُمنع استخدام (اليوم، أمس، الليلة الماضية، الأسبوع الماضي) والأشهر السريانية والاتجاهات المركبة والخلفيات الطويلة والتكرار.
+</المصطلحات_الثابتة_والاختصار>
 
 <قالب_المخرج_المطلوب>
 ${FORMAT_INSTRUCTIONS[state.selectedFormat]}
@@ -466,30 +440,21 @@ async function buildTickerPrompt(rawBulletin) {
   const maxWords = parseInt(document.getElementById("tickerMaxWords").value, 10) || 25;
   const sepMode = document.getElementById("tickerSeparator").value;
   const extraNote = document.getElementById("tickerExtraNote").value.trim();
-  const chosenExamples = await getRelevantTickerExamples(2);
 
   const inputWords = rawBulletin.trim() ? rawBulletin.trim().split(/\s+/).length : 0;
   const volumeHint = inputWords >= 450
     ? "هذه نشرة كاملة: فكّك جميع أخبارها بالكامل بحيث يتراوح إجمالي الشريط بين 800 و 1000 كلمة تقريباً في رد واحد مكتمل."
     : `هذا نص قصير (${inputWords} كلمة فقط): فكّك الوقائع الموجودة فيه فقط إلى فقرات شريط واضحة (من 10 إلى ${maxWords} كلمة للفقرة) دون حشو ودون إضافة معلومات من خارجه.`;
 
-  const rulesBlock = activeRules.map((r, i) => `- ${r.text}`).join("\n");
+  const rulesBlock = activeRules.map(r => `- ${r.text}`).join("\n");
   const dictBlock = state.dictionary
     .filter(d => !/مئة/.test(d.bad))
     .slice(0, 28)
     .map(d => `«${d.bad}» ⬅ «${d.good}»`)
     .join(" | ");
-  const examplesBlock = chosenExamples.map((ex, idx) =>
-    `مثال توضيحي (${idx + 1}) لطريقة التفكيك والفاصل فقط (لا تنقل أخباره):\n[المدخل]:\n${ex.raw}\n\n[المخرج المطلوب]:\n${ex.edited}`
-  ).join("\n\n");
-  const learnedTickerBlock = (state.learnedEdits?.ticker || []).slice(0, 15).map(it =>
-    it.before
-      ? `- خطأ سابق تم تعديله يدوياً: لا تكتب «${it.before}» ⬅ بل اكتب بأسلوب المحرر: «${it.after}»`
-      : `- نموذج فقرة معتمدة عدّلها المحرر يدوياً: «${it.after}»`
-  ).join("\n");
 
   const separatorInstruction = sepMode === "bitmap"
-    ? `ضع بعد كل فقرة سطراً فارغاً ثم السطر التالي حرفياً:\n<BITMAP>E:\\NEWS\\Logo.png</BITMAP>\nثم سطراً فارغاً قبل الفقرة التالية.`
+    ? `ضع بعد كل فقرة في السطر التالي مباشرة (دون أي سطر فارغ بينهما) الفاصل الحرفي: <BITMAP>E:\\NEWS\\Logo.png</BITMAP> ثم ابدأ الفقرة التالية في السطر الذي يليه مباشرة.`
     : `ضع كل فقرة في سطر مستقل وحدها دون ترقيم ودون نقطة في نهايتها.`;
 
   return `أنت محرر شريط إخباري تلفزيوني محترف. مهمتك الوحيدة: تحويل النص الإخباري الموجود في نهاية هذه الرسالة إلى فقرات شريط إخباري جاهزة للبث التلفزيوني.
@@ -497,13 +462,13 @@ async function buildTickerPrompt(rawBulletin) {
 التعليمات الإلزامية للتنفيذ (طبّقها عملياً وإياك أن تعيد كتابتها في ردك):
 ${rulesBlock}
 - ${volumeHint}
-- الطول المثالي لكل فقرة: من 10 إلى ${maxWords} كلمة تحمل معنى تاماً، وتبدأ بالفاعل ثم الفعل (مثال: وزارة الصحة تعلن... / قوات الاحتلال الصهيوني تعتقل 20 فلسطينياً)، وصيغ الضحايا (استشهاد رجلين / استشهاد 3 أطفال / إصابة 4 مدنيين).
+- الطول المثالي لكل فقرة: من 10 إلى ${maxWords} كلمة تحمل معنى تاماً، وتبدأ بالفاعل متبوعاً بالفعل المضارع (مثال: وزارة الصحة تعلن... / مستوطنون يهاجمون... / قوات الاحتلال الصهيوني تعتقل 20 فلسطينياً)، وصيغ الضحايا (استشهاد رجلين / استشهاد 3 أطفال / إصابة 4 مدنيين).
 - الأرقام في الشريط بالرموز دائماً (3، 15، 124) مع مسافة قبل الرقم وبعده.
 - احذف رموز الإخراج (lvo، Ss، Vt، Clip، Vb، مشاهد) والنقطة في نهاية السطر، والتزم بالمصطلحات المعتمدة: (${dictBlock}).
 - ${separatorInstruction}
 ${extraNote ? `- توجيه إضافي: ${extraNote}` : ""}
-${learnedTickerBlock ? `\nتصحيحات يدوية سابقة اعتمدها المحرر في الأشرطة الماضية (تعلّم منها والتزم بأسلوبها دون نقل أخبارها):\n${learnedTickerBlock}\n` : ""}
-${examplesBlock ? `${examplesBlock}\n\n---\n` : ""}النص الإخباري المطلوب تفكيكه وتحويله إلى شريط إخباري الآن:
+
+النص الإخباري المطلوب تفكيكه وتحويله إلى شريط إخباري الآن:
 """
 ${rawBulletin}
 """
@@ -519,7 +484,7 @@ function buildProofreaderPrompt(rawText, draftText, mode) {
 
   const modeChecks = mode === "news"
     ? `- تحقق بصرامة: هل جميع الأرقام حُوّلت إلى حروف عربية؟ هل كُتبت «مائة» ومشتقاتها بالألف؟ هل حُذفت التواريخ والأيام والساعات والروابط واسم المصدر الأصلي وعبارات (اليوم، أمس، الليلة الماضية، الأسبوع الماضي) والأشهر السريانية والاتجاهات المركبة وأسماء الوكالات والمراسلين وأسماء معتقلي الضفة؟ هل وُضع الفاصل lvo في سطره المستقل (إن كان القالب القياسي)؟ هل استُخدم «صهيوني» بدل «إسرائيلي»، و«استشهاد» بدل «مقتل»، و«فلسطيني» بدل «مواطن»، وحُذف أي تكرار أو خلفية طويلة؟`
-    : `- تحقق بصرامة من قواعد الشريط: هل تبدأ كل فقرة بالفاعل أولاً (وليس بالفعل الماضي أو بضمير عائم مثل وأضاف/وأشار)؟ هل صيغ الضحايا بصيغة «استشهاد 3 أطفال / إصابة امرأتين»؟ هل كُتبت جميع الأرقام بالرموز الرقمية (3، 15، 124) مع مسافة قبل الرقم وبعده؟ هل حُذفت رموز الإخراج (lvo، Ss، Vt، Clip، Vb، مشاهد) والنقطة من نهاية الفقرات وعبارتا «خبر عاجل / متابعة»؟ هل وُضع الفاصل <BITMAP>E:\\NEWS\\Logo.png</BITMAP> بعد كل فقرة مع سطر فارغ قبله وبعده؟`;
+    : `- تحقق بصرامة من قواعد الشريط: هل تبدأ كل فقرة بالفاعل أولاً متبوعاً بالفعل المضارع (وليس الماضي أو بضمير عائم مثل وأضاف/وأشار)؟ هل صيغ الضحايا بصيغة «استشهاد 3 أطفال / إصابة امرأتين»؟ هل كُتبت جميع الأرقام بالرموز الرقمية (3، 15، 124) مع مسافة قبل الرقم وبعده؟ هل حُذفت رموز الإخراج (lvo، Ss، Vt، Clip، Vb، مشاهد) والنقطة من نهاية الفقرات وعبارتا «خبر عاجل / متابعة»؟ هل وُضع الفاصل <BITMAP>E:\\NEWS\\Logo.png</BITMAP> في السطر التالي مباشرة دون أسطر فارغة؟`;
 
   return `أنت المدقق اللغوي والمراجع النهائي الصارم في غرفة الأخبار.
 راجع <المسودة> مقارنةً بـ <النص_الخام_الأصلي> ونفّذ بدقة تامة:
@@ -550,58 +515,150 @@ function extractPuterText(res) {
   return String(res);
 }
 
+function stripThinkTagsClient(s) {
+  return String(s || "").replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+}
+
+async function callDirectOvhKeylessPool(preferredRoute, promptText) {
+  const allRoutes = ["qwen-397b", "gpt-oss-120b", "qwen-3.8-27b", "llama-3.3-70b"];
+  const mapped = (!preferredRoute || preferredRoute === "nemotron-550b" || String(preferredRoute).includes("nvidia"))
+    ? "qwen-397b"
+    : (preferredRoute === "ovh-meta-llama-3.3-70b" ? "llama-3.3-70b" : preferredRoute);
+  const start = allRoutes.includes(mapped) ? mapped : "qwen-397b";
+  const ordered = [start, ...allRoutes.filter(x => x !== start)];
+
+  let lastErr = null;
+  for (const route of ordered) {
+    try {
+      const payload = {
+        messages: [{ role: "user", content: promptText }],
+        temperature: 0.1,
+        max_tokens: 8192
+      };
+      if (route === "qwen-397b") { payload.model = "Qwen3.5-397B-A17B"; payload.reasoning_effort = "none"; }
+      else if (route === "gpt-oss-120b") { payload.model = "gpt-oss-120b"; payload.reasoning_effort = "low"; }
+      else if (route === "qwen-3.8-27b") { payload.model = "Qwen3.8-27B"; payload.reasoning_effort = "none"; }
+      else { payload.model = "Meta-Llama-3_3-70B-Instruct"; }
+
+      const r = await fetch("https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d?.error?.message || d?.message || `OVH HTTP ${r.status}`);
+      const txt = stripThinkTagsClient(d?.choices?.[0]?.message?.content);
+      if (txt) return txt;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error("تعذر الاتصال بالمحرك الفوري");
+}
+
+async function callDirectGroqPool(preferredModel, groqKey, promptText) {
+  const retiredMap = {
+    "meta-llama/llama-4-scout-17b-16e-instruct": "openai/gpt-oss-120b",
+    "meta-llama/llama-4-maverick-17b-128e-instruct": "openai/gpt-oss-120b",
+    "llama-3.3-70b-versatile": "openai/gpt-oss-120b",
+    "llama-3.1-8b-instant": "openai/gpt-oss-20b",
+    "qwen/qwen3-32b": "qwen/qwen3.8-27b",
+    "qwen/qwen3.6-27b": "qwen/qwen3.8-27b"
+  };
+  const pool = ["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b"];
+  const primary = retiredMap[preferredModel] || (preferredModel && !preferredModel.includes("llama") ? preferredModel : "openai/gpt-oss-120b");
+  const candidates = [primary, ...pool.filter(m => m !== primary)];
+
+  let lastErr = null;
+  for (const targetModel of candidates) {
+    const tryOnce = async (minimal) => {
+      const payload = {
+        model: targetModel,
+        messages: [{ role: "user", content: promptText }],
+        temperature: 0.1
+      };
+      if (!minimal) {
+        payload.max_tokens = 8192;
+        if (targetModel.startsWith("openai/gpt-oss-")) {
+          payload.reasoning_effort = "low";
+          payload.include_reasoning = false;
+        } else if (targetModel.startsWith("qwen/qwen3.8")) {
+          payload.reasoning_effort = "none";
+        }
+      }
+      const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${groqKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const d = await r.json();
+      return { ok: r.ok, status: r.status, d };
+    };
+
+    let res = await tryOnce(false);
+    if (!res.ok && res.status === 400) res = await tryOnce(true);
+    if (res.ok) {
+      const txt = stripThinkTagsClient(res.d?.choices?.[0]?.message?.content);
+      if (txt) return txt;
+    }
+    if (res.status === 401) {
+      throw new Error("مفتاح Groq غير صالح. اختر المحرك الأول «🟢 مجاني فوري 100%» أو تحقق من المفتاح.");
+    }
+    lastErr = new Error(res.d?.error?.message || `Groq HTTP ${res.status}`);
+  }
+  throw lastErr || new Error("تعذر الاتصال بـ Groq");
+}
+
 async function callModel(engine, model, promptText) {
   const apiKey = (state.keys[engine] || "").trim();
+  const isStaticHost = typeof location !== "undefined" && (location.hostname.endsWith("github.io") || location.protocol === "file:");
 
-  // Try Vercel Serverless Bridge (/api/ai) first
-  try {
-    const bridgeRes = await fetch("/api/ai", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ engine, model, prompt: promptText, apiKey })
-    });
-    const ct = bridgeRes.headers.get("content-type") || "";
-    if (bridgeRes.status !== 404 && bridgeRes.status !== 405 && bridgeRes.status !== 501 && ct.includes("application/json")) {
-      const bridgeData = await bridgeRes.json();
-      if (!bridgeRes.ok) throw new Error(bridgeData?.error || "خطأ من الخادم الوسيط");
-      return (bridgeData.text || "").trim();
-    }
-  } catch (bridgeErr) {
-    if (bridgeErr.message && !bridgeErr.message.includes("Failed to fetch") && !bridgeErr.message.includes("Load failed") && !bridgeErr.message.includes("NetworkError")) {
-      throw bridgeErr;
+  // 1. Try Vercel Serverless Bridge (/api/ai) when hosted on Vercel
+  if (!isStaticHost) {
+    try {
+      const bridgeRes = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ engine, model, prompt: promptText, apiKey })
+      });
+      const ct = bridgeRes.headers.get("content-type") || "";
+      if (bridgeRes.status !== 404 && bridgeRes.status !== 405 && bridgeRes.status !== 501 && ct.includes("application/json")) {
+        const bridgeData = await bridgeRes.json();
+        if (!bridgeRes.ok) throw new Error(bridgeData?.error || "خطأ من الخادم الوسيط");
+        return stripThinkTagsClient(bridgeData.text);
+      }
+    } catch (bridgeErr) {
+      if (bridgeErr.message && !bridgeErr.message.includes("Failed to fetch") && !bridgeErr.message.includes("Load failed") && !bridgeErr.message.includes("NetworkError")) {
+        throw bridgeErr;
+      }
     }
   }
 
-  // Local browser fallback when /api/ai is unavailable (e.g. offline static file)
-  if (engine === "instant_free") {
-    if (model === "nemotron-550b") {
-      const r = await fetch("https://api.kilo.ai/api/gateway/chat/completions", {
-        method: "POST",
-        headers: { "Authorization": "Bearer anonymous", "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "nvidia/nemotron-3-ultra-550b-a55b:free", messages: [{ role: "user", content: promptText }], temperature: 0.1 })
-      });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d?.error?.message || "تعذر الاتصال بالمحرك الفوري");
-      return (d?.choices?.[0]?.message?.content || "").trim();
+  // 2. Direct Browser Execution (works on GitHub Pages & static hosts with full failover!)
+  if (engine === "instant_free" || model === "ovh-meta-llama-3.3-70b" || String(model || "").includes("nvidia")) {
+    try {
+      return await callDirectOvhKeylessPool(model, promptText);
+    } catch (ovhErr) {
+      if (state.keys.groq) {
+        return await callDirectGroqPool("openai/gpt-oss-120b", state.keys.groq, promptText);
+      }
+      throw ovhErr;
     }
-    const ovhBody = {
-      model: model === "gpt-oss-120b" ? "gpt-oss-120b" : "Meta-Llama-3_3-70B-Instruct",
-      messages: [{ role: "user", content: promptText }],
-      temperature: 0.1
-    };
-    if (model === "gpt-oss-120b") ovhBody.reasoning_effort = "low";
-    const r = await fetch("https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(ovhBody)
-    });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d?.error?.message || "تعذر الاتصال بالمحرك الفوري");
-    return (d?.choices?.[0]?.message?.content || "").trim();
   }
 
   if (!apiKey) {
-    throw new Error(`يرجى اختيار المحرك الأول «🟢 مجاني فوري 100% بدون مفتاح»، أو لصق مفتاح ${engine.toUpperCase()} في تبويب «⚡ الربط والمزامنة».`);
+    throw new Error(`يرجى اختيار المحرك الأول «🟢 مجاني فوري 100% بدون مفتاح»، أو التأكد من حفظ مفتاح ${engine.toUpperCase()} في الإعدادات.`);
+  }
+
+  if (engine === "groq") {
+    try {
+      return await callDirectGroqPool(model, apiKey, promptText);
+    } catch (groqErr) {
+      if (!String(groqErr.message || "").includes("غير صالح")) {
+        return await callDirectOvhKeylessPool("qwen-397b", promptText);
+      }
+      throw groqErr;
+    }
   }
 
   if (engine === "gemini") {
@@ -633,19 +690,21 @@ async function callModel(engine, model, promptText) {
     return parts.filter(p => !p.thought).map(p => p.text || "").join("").trim();
   }
 
-  const endpointMap = {
-    groq: "https://api.groq.com/openai/v1/chat/completions",
-    openrouter: "https://openrouter.ai/api/v1/chat/completions"
-  };
-  const endpoint = endpointMap[engine] || endpointMap.openrouter;
-  const r = await fetch(endpoint, {
-    method: "POST",
-    headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model, messages: [{ role: "user", content: promptText }], temperature: 0.1 })
-  });
-  const d = await r.json();
-  if (!r.ok) throw new Error(d?.error?.message || d?.message || "تعذر الاتصال بالمحرك");
-  return (d?.choices?.[0]?.message?.content || "").trim();
+  // OpenRouter with fallback to openrouter/free then keyless
+  const orModels = [model, "openrouter/free"].filter((v, i, a) => v && !v.includes("nvidia") && a.indexOf(v) === i);
+  for (const orMod of orModels) {
+    const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: orMod, messages: [{ role: "user", content: promptText }], temperature: 0.1 })
+    });
+    const d = await r.json();
+    if (r.ok) {
+      const txt = stripThinkTagsClient(d?.choices?.[0]?.message?.content);
+      if (txt) return txt;
+    }
+  }
+  return await callDirectOvhKeylessPool("qwen-397b", promptText);
 }
 
 function cleanAiMetaText(txt) {
@@ -808,7 +867,7 @@ function formatPureTickerItems(items, sepOverride) {
   if (!items.length) return "";
   const mode = sepOverride || document.getElementById("tickerSeparator")?.value || "bitmap";
   if (mode === "bitmap") {
-    return items.map(p => `${p}\n\n${TICKER_BITMAP_TAG}`).join("\n\n");
+    return items.map(p => `${p}\n${TICKER_BITMAP_TAG}`).join("\n");
   }
   if (mode === "bullet") return items.map(l => `• ${l}`).join("\n");
   if (mode === "dash") return items.map(l => `- ${l}`).join("\n");
@@ -1057,69 +1116,105 @@ function computeWordDiffHtml(beforeStr, afterStr) {
   return { beforeHtml: beforeParts.join(" "), afterHtml: afterParts.join(" ") };
 }
 
-function renderDiffLearnBox(mode, newLessons, noChangeDetected) {
+async function distillAbstractRulesWithAI(mode, comparisonMaterial) {
+  const isTicker = mode === "ticker";
+  const targetList = isTicker ? state.tickerRules : state.newsRules;
+  const existingSummary = targetList.filter(r => r.active).slice(0, 20).map(r => `- ${r.text}`).join("\n");
+  const eng = (isTicker ? document.getElementById("tickerEngineSelect")?.value : document.getElementById("primaryEngineSelect")?.value) || "instant_free";
+  const mod = (isTicker ? document.getElementById("tickerModelSelect")?.value : document.getElementById("primaryModelSelect")?.value) || "qwen-397b";
+
+  const prompt = `أنت خبير في استخلاص السياسات والأنماط التحريرية لغرف الأخبار.
+ادرس المادة التالية المأخوذة من عمل المحرر في قسم (${isTicker ? "الشريط الإخباري" : "تحرير الأخبار"})، واستخلص منها فقط **النمط والأسلوب والقواعد التحريرية العامة** التي اعتمدها المحرر دون حفظ النص حرفياً:
+
+${comparisonMaterial}
+
+<قواعد_موجودة_مسبقاً_تجنب_تكرارها>
+${existingSummary}
+</قواعد_موجودة_مسبقاً_تجنب_تكرارها>
+
+شروط صارمة جداً للإخراج:
+1. استخرج من 1 إلى 3 قواعد أسلوبية/تحريرية جديدة ومختصرة جداً (لا تتجاوز كل قاعدة 20 كلمة).
+2. يُمنع منعاً باتاً حفظ النص حرفياً أو ذكر أسماء أشخاص أو مناطق أو أرقام أو وقائع خاصة بالخبر في القاعدة المستخلصة! صغها كقاعدة نمطية عامة ومجردة تصلح لكل الأخبار اللاحقة لتخفيف حجم الأمر على النماذج.
+3. إذا كانت جميع الملاحظات مغطاة حرفياً في القواعد الموجودة مسبقاً، أخرج قاعدة واحدة مكثفة تؤكد أدق فرق أسلوبي لاحظته.
+4. أخرج القواعد فقط، كل قاعدة في سطر مستقل يبدأ بـ (- ) دون أي عناوين أو مقدمات أو شروحات.`;
+
+  const aiResp = cleanAiMetaText(await callModel(eng, mod, prompt));
+  const extracted = aiResp
+    .split(/\n+/)
+    .map(l => l.replace(/^[\s\-*•\d.)(]+/, "").trim())
+    .filter(l => l.length >= 10 && l.length <= 220 && !/^<?قواعد|^شروط|^المادة/i.test(l))
+    .slice(0, 3);
+
+  const addedRules = [];
+  extracted.forEach((ruleText, idx) => {
+    const alreadyExists = targetList.some(r => r.text.trim() === ruleText);
+    if (!alreadyExists) {
+      const ruleObj = {
+        id: "rule-" + (Date.now() + idx),
+        category: "نمط مستلهم",
+        active: true,
+        text: ruleText
+      };
+      targetList.unshift(ruleObj);
+      addedRules.push(ruleText);
+    }
+  });
+
+  if (addedRules.length > 0) {
+    persistRules();
+    const token = (state.keys.github || "").trim();
+    if (token) {
+      const filePath = isTicker ? "data/ticker-rules.json" : "data/news-rules.json";
+      try {
+        await githubPutFile(token, filePath, targetList, "إضافة قواعد نمط وأسلوب مستلهمة (دون حفظ أمثلة حرفية)");
+      } catch (e) {}
+    }
+  }
+  return addedRules;
+}
+
+function renderDiffLearnBox(mode, newLessons, distilledRules, noChangeDetected) {
   const isTicker = mode === "ticker";
   const boxId = isTicker ? "tickerDiffLearnBox" : "newsDiffLearnBox";
   const box = document.getElementById(boxId);
   if (!box) return;
   const bucket = isTicker ? "ticker" : "news";
-  const allSaved = (state.learnedEdits && state.learnedEdits[bucket]) || [];
 
   let html = `
     <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
       <strong style="font-size:0.9rem; color:var(--ok);">
         ${noChangeDetected
           ? "ℹ️ لم يُرصد فرق جديد بعد — عدّل داخل النص أعلاه ثم اضغط «مقارنة التعديلات»"
-          : `✅ تمت مقارنة تعديلاتك وحفظ (${newLessons.length}) تصويب ليتعلم منها النموذج تلقائياً!`}
+          : `✅ تمت مقارنة تعديلاتك واستلهام النمط التحريري منها دون حفظ النص حرفياً!`}
       </strong>
       <button class="btn btn-outline btn-sm" style="padding:3px 9px; font-size:0.76rem;" onclick="hideDiffBox('${bucket}')">✖ إخفاء</button>
     </div>
   `;
 
+  if (Array.isArray(distilledRules) && distilledRules.length > 0) {
+    html += `
+      <div class="diff-card" style="border-color:var(--ok); background:var(--ok-soft);">
+        <div style="font-weight:800; color:var(--ok); margin-bottom:4px;">🧠 القواعد والأنماط الأسلوبية المستلهمة المضافة تلقائياً للسياسة التحريرية:</div>
+        ${distilledRules.map(r => `<div style="margin-top:3px;">• ${escapeHtml(r)}</div>`).join("")}
+      </div>
+    `;
+  }
+
   if (newLessons.length > 0) {
-    html += newLessons.map((item, idx) => {
+    html += `<div class="muted-note" style="margin-top:8px;">🔎 <strong>معاينة الفروق التي استُلهم منها النمط (تُعرض للمعاينة فقط ولا تُحفظ حرفياً):</strong></div>`;
+    html += newLessons.slice(0, 6).map(item => {
       const diff = computeWordDiffHtml(item.before, item.after);
       return `
         <div class="diff-card">
           ${item.before ? `<div class="diff-row-before">🔴 <strong>قبل التعديل:</strong> ${diff.beforeHtml}</div>` : ""}
-          <div class="diff-row-after">🟢 <strong>بعد تعديلك (تعلّمه النموذج):</strong> ${diff.afterHtml}</div>
+          <div class="diff-row-after">🟢 <strong>بعد تعديلك:</strong> ${diff.afterHtml}</div>
         </div>
       `;
     }).join("");
   }
 
-  if (allSaved.length > 0) {
-    html += `
-      <details style="margin-top:9px; font-size:0.82rem;" ${noChangeDetected ? "open" : ""}>
-        <summary style="cursor:pointer; font-weight:700; color:var(--primary);">
-          📚 سجل التعديلات المتعلَّمة النشطة حالياً (${allSaved.length})
-        </summary>
-        <div style="margin-top:6px;">
-          ${allSaved.slice(0, 12).map((it, idx) => `
-            <div class="diff-card" style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
-              <div style="flex:1; min-width:0;">
-                ${it.before ? `<div class="diff-row-before">❌ ${escapeHtml(it.before)}</div>` : ""}
-                <div class="diff-row-after">✅ ${escapeHtml(it.after)}</div>
-              </div>
-              <button class="btn btn-outline btn-sm" style="padding:2px 7px; font-size:0.74rem;" onclick="deleteLearnedEdit('${bucket}', ${idx})" title="حذف هذا التصويب">🗑️</button>
-            </div>
-          `).join("")}
-        </div>
-      </details>
-    `;
-  }
-
   box.innerHTML = html;
   box.style.display = "block";
-}
-
-function deleteLearnedEdit(mode, idx) {
-  const bucket = mode === "ticker" ? "ticker" : "news";
-  if (!state.learnedEdits || !Array.isArray(state.learnedEdits[bucket])) return;
-  state.learnedEdits[bucket].splice(idx, 1);
-  SafeStorage.set("nr_learned_edits_v1", state.learnedEdits);
-  renderDiffLearnBox(bucket, [], true);
-  showToast("🗑️ تم حذف التصويب من ذاكرة التعلّم");
 }
 
 async function saveManualEditsForLearning(mode) {
@@ -1161,54 +1256,41 @@ async function saveManualEditsForLearning(mode) {
       });
       if (bestIdx !== -1 && bestScore >= 0.3) {
         usedOldIdx.add(bestIdx);
-        newLessons.push({ before: candidateOld[bestIdx], after: afterLine, ts: Date.now() });
+        newLessons.push({ before: candidateOld[bestIdx], after: afterLine });
       } else if (afterLine.split(/\s+/).length >= 5) {
-        newLessons.push({ before: "", after: afterLine, ts: Date.now() });
+        newLessons.push({ before: "", after: afterLine });
       }
     }
 
     if (newLessons.length === 0 && currentVal === prevVal.trim()) {
-      renderDiffLearnBox(mode, [], true);
-      showToast("ℹ️ عدّل النص أولاً داخل الخانة ثم اضغط «مقارنة التعديلات» لرصد الفروق وحفظها");
+      renderDiffLearnBox(mode, [], [], true);
+      showToast("ℹ️ عدّل النص أولاً داخل الخانة ثم اضغط «مقارنة التعديلات» لاستلهام النمط من تعديلك");
       return;
     }
   }
 
-  // If user pasted/wrote directly without a prior AI draft, capture representative approved lines
   if (newLessons.length === 0) {
     newLines.slice(0, 4).forEach(line => {
-      if (line.split(/\s+/).length >= 5) {
-        newLessons.push({ before: "", after: line, ts: Date.now() });
-      }
+      if (line.split(/\s+/).length >= 5) newLessons.push({ before: "", after: line });
     });
   }
 
-  const bucket = isTicker ? "ticker" : "news";
-  if (!state.learnedEdits) state.learnedEdits = { news: [], ticker: [] };
-  const combined = [...newLessons, ...(state.learnedEdits[bucket] || [])];
-  const seen = new Set();
-  state.learnedEdits[bucket] = combined.filter(it => {
-    const k = `${it.before || ""}->${it.after || ""}`;
-    if (!it.after || seen.has(k)) return false;
-    seen.add(k);
-    return true;
-  }).slice(0, 25);
+  // Show immediate diff preview while AI distills abstract rules (without saving verbatim text!)
+  renderDiffLearnBox(mode, newLessons, ["⏳ جاري استلهام القاعدة والأسلوب التحريري العام من تعديلاتك دون حفظ النص حرفياً..."], false);
 
-  SafeStorage.set("nr_learned_edits_v1", state.learnedEdits);
-  if (isTicker) state.lastAiTickerDraft = currentVal;
-  else state.lastAiNewsDraft = currentVal;
-
-  renderDiffLearnBox(mode, newLessons, false);
-
-  const token = (state.keys.github || "").trim();
-  if (token) {
-    try {
-      await githubPutFile(token, "data/learned-edits.json", state.learnedEdits, "تحديث سجل التعديلات اليدوية المتعلَّمة");
-      showToast(`✅ تمت مقارنة وحفظ (${newLessons.length}) تعديل ومزامنتها في GitHub!`);
-      return;
-    } catch (e) {}
+  try {
+    const pairsText = newLessons.slice(0, 8).map((p, i) =>
+      p.before ? `${i + 1}) قبل التعديل: «${p.before}» ⬅ بعد تعديل المحرر: «${p.after}»` : `${i + 1}) صياغة المحرر المعتمدة: «${p.after}»`
+    ).join("\n");
+    const addedRules = await distillAbstractRulesWithAI(mode, pairsText);
+    if (isTicker) state.lastAiTickerDraft = currentVal;
+    else state.lastAiNewsDraft = currentVal;
+    renderDiffLearnBox(mode, newLessons, addedRules.length ? addedRules : ["تم تأكيد توافق النمط مع القواعد المفعّلة لديك دون الحاجة لإضافة نص مكرر"], false);
+    showToast(`🧠 تم استلهام (${addedRules.length || 1}) قاعدة أسلوبية خفيفة من تعديلاتك دون حفظ النص حرفياً!`);
+  } catch (err) {
+    renderDiffLearnBox(mode, newLessons, [], false);
+    showToast(`⚠️ تعذر استلهام النمط تلقائياً: ${err.message}`);
   }
-  showToast(`✅ تمت مقارنة وحفظ (${newLessons.length}) تعديل ليستفيد منها النموذج لاحقاً!`);
 }
 
 // =========================================================================
@@ -1618,147 +1700,115 @@ async function syncToGitHubRepo() {
     await githubPutFile(token, "data/news-rules.json", state.newsRules, "تحديث قواعد تحرير الأخبار");
     await githubPutFile(token, "data/ticker-rules.json", state.tickerRules, "تحديث قواعد الشريط الإخباري");
     await githubPutFile(token, "data/dictionary.json", state.dictionary, "تحديث قاموس المصطلحات الثابتة");
-    await githubPutFile(token, "data/learned-edits.json", state.learnedEdits || { news: [], ticker: [] }, "تحديث التعديلات المتعلَّمة");
     await githubPutFile(token, "data/shared-keys.json", buildEncodedVaultObject(state.keys), "مزامنة مفاتيح الصفحة المشفرة لكل الأجهزة");
 
-    // Promote any local examples into their own separate JSON files in GitHub!
-    if (state.localNewsExamples.length > 0) {
-      const newIndex = [...repoDefaults.newsIndex];
-      for (const ex of state.localNewsExamples) {
-        const slug = `news-${Date.now()}-${Math.floor(Math.random()*1000)}`;
-        const path = `data/news-examples/${slug}.json`;
-        await githubPutFile(token, path, { id: slug, title: ex.title, category: ex.category, raw: ex.raw, edited: ex.edited }, `إضافة مثال خبر منفصل: ${ex.title}`);
-        newIndex.unshift({ id: slug, title: ex.title, category: ex.category, file: path });
-      }
-      await githubPutFile(token, "data/news-examples/index.json", newIndex, "تحديث فهرس أمثلة الأخبار");
-      repoDefaults.newsIndex = newIndex;
-      state.localNewsExamples = [];
-      SafeStorage.set("nr_local_news_ex", []);
-    }
-
-    if (state.localTickerExamples.length > 0) {
-      const newTIndex = [...repoDefaults.tickerIndex];
-      for (const ex of state.localTickerExamples) {
-        const slug = `bulletin-${Date.now()}-${Math.floor(Math.random()*1000)}`;
-        const path = `data/ticker-examples/${slug}.json`;
-        await githubPutFile(token, path, { id: slug, title: ex.title, category: "شريط", raw: ex.raw, edited: ex.edited }, `إضافة مثال نشرة منفصل: ${ex.title}`);
-        newTIndex.unshift({ id: slug, title: ex.title, category: "شريط", file: path });
-      }
-      await githubPutFile(token, "data/ticker-examples/index.json", newTIndex, "تحديث فهرس أمثلة النشرات");
-      repoDefaults.tickerIndex = newTIndex;
-      state.localTickerExamples = [];
-      SafeStorage.set("nr_local_ticker_ex", []);
-    }
-
     renderExamples();
-    showToast("✅ تم حفظ كافة القواعد والأمثلة في ملفاتها المنفصلة على GitHub! سيتحدث Vercel تلقائياً.");
+    showToast("✅ تم حفظ كافة القواعد والأنماط المستلهمة والقاموس في GitHub بنجاح!");
   } catch (err) {
     showToast(`⚠️ خطأ مزامنة GitHub: ${err.message}`);
   }
 }
 
 // =========================================================================
-// Examples & Dictionary UI
+// Style Distillation & Dictionary UI
 // =========================================================================
 function switchExSub(sub) {
   state.exSubTab = sub;
   document.getElementById("exSubNewsBtn").classList.toggle("active", sub === "news");
   document.getElementById("exSubTickerBtn").classList.toggle("active", sub === "ticker");
-  document.getElementById("exCatWrapper").style.display = sub === "news" ? "block" : "none";
   renderExamples();
 }
 
 function renderExamples() {
-  const repoList = state.exSubTab === "news" ? repoDefaults.newsIndex : repoDefaults.tickerIndex;
-  const localList = state.exSubTab === "news" ? state.localNewsExamples : state.localTickerExamples;
-  document.getElementById("examplesCountBadge").textContent = repoDefaults.newsIndex.length + repoDefaults.tickerIndex.length + state.localNewsExamples.length + state.localTickerExamples.length;
+  const distilledNews = state.newsRules.filter(r => r.category === "نمط مستلهم");
+  const distilledTicker = state.tickerRules.filter(r => r.category === "نمط مستلهم");
+  const badge = document.getElementById("examplesCountBadge");
+  if (badge) badge.textContent = distilledNews.length + distilledTicker.length;
 
-  const combined = [
-    ...localList.map((x, idx) => ({ ...x, _source: "local", _idx: idx })),
-    ...repoList.map(x => ({ ...x, _source: "repo" }))
-  ];
-
+  const list = state.exSubTab === "news" ? distilledNews : distilledTicker;
   const box = document.getElementById("examplesListContainer");
-  if (!combined.length) { box.innerHTML = `<p class="muted-note">لا توجد أمثلة بعد.</p>`; return; }
+  if (!box) return;
+  if (!list.length) {
+    box.innerHTML = `<p class="muted-note">لا توجد أنماط إضافية مستلهمة بعد — الصق أي (خبر خام + خبر محرر) أو (نشرة + شريط) ليستخلص التطبيق منها النمط والأسلوب التحريري فقط في قواعد خفيفة دون حفظ الأمثلة حرفياً.</p>`;
+    return;
+  }
 
-  box.innerHTML = combined.map((ex, i) => `
+  box.innerHTML = list.map((r) => `
     <div class="example-card">
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
-        <div>
-          <strong>${escapeHtml(ex.title || ex.id)}</strong>
-          <span class="chip ${ex._source === 'repo' ? 'chip-ok' : 'chip-warn'}" style="margin-right:6px;">
-            ${ex._source === 'repo' ? `ملف منفصل (${escapeHtml(ex.file)})` : 'جديد بالمتصفح (جاهز للرفع لـ GitHub)'}
-          </span>
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+        <div style="flex:1;">
+          <span class="chip chip-ok" style="margin-left:6px;">🧠 نمط مستلهم</span>
+          <span style="font-size:0.88rem; line-height:1.6;">${escapeHtml(r.text)}</span>
         </div>
-        <div style="display:flex; gap:5px;">
-          <button class="btn btn-outline btn-sm" onclick="inspectExample(${i})">👁️ عرض</button>
-          ${ex._source === 'local' ? `<button class="btn btn-outline btn-sm" onclick="deleteLocalExample(${ex._idx})">🗑️</button>` : ""}
-        </div>
+        <button class="btn btn-outline btn-sm" onclick="deleteDistilledRule('${r.id}')" title="حذف هذه القاعدة المستلهمة">🗑️</button>
       </div>
-      <div id="exDetailBox-${i}" style="display:none; margin-top:8px;"></div>
     </div>`).join("");
 }
 
-async function inspectExample(combinedIdx) {
-  const repoList = state.exSubTab === "news" ? repoDefaults.newsIndex : repoDefaults.tickerIndex;
-  const localList = state.exSubTab === "news" ? state.localNewsExamples : state.localTickerExamples;
-  const item = [...localList, ...repoList][combinedIdx];
-  const box = document.getElementById(`exDetailBox-${combinedIdx}`);
-  if (box.style.display === "block") { box.style.display = "none"; return; }
-  box.style.display = "block";
-  box.innerHTML = `<span class="muted-note">⏳ جاري قراءة الملف المنفصل...</span>`;
-  const detail = await loadExampleDetail(item);
-  if (!detail) { box.innerHTML = `<span class="muted-note">تعذر قراءة الملف</span>`; return; }
-  box.innerHTML = `
-    <div class="example-cols">
-      <div><small class="muted-note">الخام:</small><div class="mini-box">${escapeHtml(detail.raw)}</div></div>
-      <div><small class="muted-note">المعتمد:</small><div class="mini-box">${escapeHtml(detail.edited)}</div></div>
-    </div>`;
+function deleteDistilledRule(ruleId) {
+  if (state.exSubTab === "news") {
+    state.newsRules = state.newsRules.filter(r => r.id !== ruleId);
+  } else {
+    state.tickerRules = state.tickerRules.filter(r => r.id !== ruleId);
+  }
+  persistRules();
+  renderExamples();
+  showToast("🗑️ حُذفت القاعدة المستلهمة");
 }
 
-function addExamplePair() {
-  const title = document.getElementById("exTitleInput").value.trim() || "مثال معتمد";
-  const category = document.getElementById("exCategoryInput").value;
+async function addExamplePair() {
   const raw = document.getElementById("exRawInput").value.trim();
   const edited = document.getElementById("exEditedInput").value.trim();
-  if (!raw || !edited) { showToast("⚠️ املأ الخانتين معاً"); return; }
+  if (!raw || !edited) { showToast("⚠️ الصق النص الخام والصياغة المعتمدة معاً لاستلهام النمط منهما"); return; }
 
-  if (state.exSubTab === "news") {
-    state.localNewsExamples.unshift({ id: "loc-" + Date.now(), title, category, raw, edited });
-    SafeStorage.set("nr_local_news_ex", state.localNewsExamples);
-  } else {
-    state.localTickerExamples.unshift({ id: "loc-" + Date.now(), title, category: "شريط", raw, edited });
-    SafeStorage.set("nr_local_ticker_ex", state.localTickerExamples);
+  const mode = state.exSubTab === "news" ? "news" : "ticker";
+  const btn = document.getElementById("distillExampleBtn");
+  if (btn) btn.disabled = true;
+  showToast("⏳ جاري استلهام النمط والقواعد والأسلوب التحريري فقط دون حفظ المثال حرفياً...");
+
+  try {
+    const material = `[النص الخام قبل التحرير]:\n${raw.slice(0, 3500)}\n\n[الصياغة المعتمدة بعد التحرير]:\n${edited.slice(0, 3500)}`;
+    const added = await distillAbstractRulesWithAI(mode, material);
+    if (document.getElementById("exTitleInput")) document.getElementById("exTitleInput").value = "";
+    document.getElementById("exRawInput").value = "";
+    document.getElementById("exEditedInput").value = "";
+    renderExamples();
+    showToast(`🧠 تم استلهام (${added.length || 1}) قاعدة أسلوبية خفيفة وإضافتها للسياسة التحريرية دون حفظ النص حرفياً!`);
+  } catch (err) {
+    showToast(`⚠️ تعذر استلهام النمط: ${err.message}`);
+  } finally {
+    if (btn) btn.disabled = false;
   }
-  document.getElementById("exTitleInput").value = "";
-  document.getElementById("exRawInput").value = "";
-  document.getElementById("exEditedInput").value = "";
-  renderExamples();
-  showToast("✅ حُفظ المثال! (اضغط «☁️ حفظ في GitHub» متى أردت تحويله لملف منفصل دائم)");
 }
 
-function deleteLocalExample(idx) {
-  if (state.exSubTab === "news") { state.localNewsExamples.splice(idx, 1); SafeStorage.set("nr_local_news_ex", state.localNewsExamples); }
-  else { state.localTickerExamples.splice(idx, 1); SafeStorage.set("nr_local_ticker_ex", state.localTickerExamples); }
-  renderExamples();
-}
-
-function saveCurrentNewsAsExample() {
+async function saveCurrentNewsAsExample() {
   const raw = document.getElementById("rawNewsInput").value.trim();
   const edited = document.getElementById("editedNewsOutput").value.trim();
-  if (!raw || !edited) { showToast("⚠️ يلزم الخبر الخام والمحرر معاً"); return; }
-  state.localNewsExamples.unshift({ id: "loc-" + Date.now(), title: edited.split("\n").slice(0,2).join(" - ").slice(0, 50), category: "عام", raw, edited });
-  SafeStorage.set("nr_local_news_ex", state.localNewsExamples);
-  renderExamples(); showToast("⭐ حُفظ في أمثلتك!");
+  if (!raw || !edited) { showToast("⚠️ يلزم الخبر الخام والمحرر معاً لاستلهام النمط"); return; }
+  showToast("⏳ جاري استلهام النمط والأسلوب التحريري من هذا الخبر دون حفظه حرفياً...");
+  try {
+    const material = `[الخبر الخام]:\n${raw.slice(0, 3000)}\n\n[الخبر المحرر المعتمد]:\n${edited.slice(0, 3000)}`;
+    const added = await distillAbstractRulesWithAI("news", material);
+    renderExamples();
+    showToast(`🧠 تم استلهام (${added.length || 1}) قاعدة أسلوبية خفيفة وإضافتها للقواعد دون حفظ الخبر حرفياً!`);
+  } catch (err) {
+    showToast(`⚠️ تعذر استلهام النمط: ${err.message}`);
+  }
 }
 
-function saveCurrentTickerAsExample() {
+async function saveCurrentTickerAsExample() {
   const raw = document.getElementById("rawBulletinInput").value.trim();
   const edited = document.getElementById("tickerOutput").value.trim();
   if (!raw || !edited) { showToast("⚠️ يلزم النشرة الخام والشريط معاً"); return; }
-  state.localTickerExamples.unshift({ id: "loc-" + Date.now(), title: `نشرة (${getCleanTickerItems().length} فقرة)`, category: "شريط", raw, edited });
-  SafeStorage.set("nr_local_ticker_ex", state.localTickerExamples);
-  renderExamples(); showToast("⭐ حُفظت النشرة وشريطها!");
+  showToast("⏳ جاري استلهام النمط من الشريط دون حفظه حرفياً...");
+  try {
+    const material = `[النشرة الخام]:\n${raw.slice(0, 3000)}\n\n[الشريط المعتمد]:\n${edited.slice(0, 3000)}`;
+    const added = await distillAbstractRulesWithAI("ticker", material);
+    renderExamples();
+    showToast(`🧠 تم استلهام (${added.length || 1}) قاعدة شريط خفيفة دون حفظ النص حرفياً!`);
+  } catch (err) {
+    showToast(`⚠️ ${err.message}`);
+  }
 }
 
 function renderDictionary() {
@@ -2034,14 +2084,14 @@ function setupPwaFeatures() {
   // Purge any old v1-v4 PWA caches automatically so updates apply immediately!
   if ("caches" in window) {
     caches.keys().then(keys => {
-      keys.filter(k => k !== "mihbarah-pwa-v24").forEach(k => caches.delete(k));
+      keys.filter(k => k !== "mihbarah-pwa-v25").forEach(k => caches.delete(k));
     }).catch(() => {});
   }
 
   // 1. Register Service Worker
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js?v=24").then(reg => {
+      navigator.serviceWorker.register("sw.js?v=25").then(reg => {
         reg.update().catch(() => {});
       }).catch(() => {});
     });
