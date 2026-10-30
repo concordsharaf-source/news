@@ -406,8 +406,12 @@ async function getRelevantTickerExamples(limit = 3) {
 
 async function buildEditorialPrompt(rawText) {
   const activeRules = state.newsRules.filter(r => r.active);
-  const cat = document.getElementById("newsCategory").value;
-  const extraNote = document.getElementById("extraNote").value.trim();
+  const cat = /غزة|رفح|خان يونس|جباليا|النصيرات|الشجاعية|دير البلح/.test(rawText)
+    ? "غزة"
+    : (/الضفة|جنين|نابلس|طولكرم|الخليل|رام الله|قلقيلية|بيت لحم/.test(rawText)
+      ? "الضفة"
+      : (/لبنان|بيروت|البقاع|النبطية|صور|بنت جبيل/.test(rawText) ? "لبنان" : "all"));
+  const extraNote = (document.getElementById("extraNote")?.value || "").trim();
   const chosenExamples = await getRelevantNewsExamples(cat, 3);
 
   const rulesBlock = activeRules.map((r, i) => `${i + 1}. ${r.text}`).join("\n");
@@ -2030,14 +2034,14 @@ function setupPwaFeatures() {
   // Purge any old v1-v4 PWA caches automatically so updates apply immediately!
   if ("caches" in window) {
     caches.keys().then(keys => {
-      keys.filter(k => k !== "mihbarah-pwa-v18").forEach(k => caches.delete(k));
+      keys.filter(k => k !== "mihbarah-pwa-v19").forEach(k => caches.delete(k));
     }).catch(() => {});
   }
 
   // 1. Register Service Worker
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js?v=18").then(reg => {
+      navigator.serviceWorker.register("sw.js?v=19").then(reg => {
         reg.update().catch(() => {});
       }).catch(() => {});
     });

@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="assets/style.css?v=18" />
+  <link rel="stylesheet" href="assets/style.css?v=19" />
 </head>
 <body>
   <header class="topbar">
@@ -69,30 +69,9 @@
 
             <hr style="border:none; border-top:1px solid var(--border); margin:12px 0;" />
 
-            <label>1️⃣ القالب التحريري المطلوب:</label>
-            <div class="pills" id="formatPills">
-              <button class="pill active" onclick="selectFormat('lvo_standard', this)">📺 القالب المعتمد الكامل (مع فاصل lvo)</button>
-              <button class="pill" onclick="selectFormat('short_news', this)">📰 خبر مختصر (بدون lvo)</button>
-              <button class="pill" onclick="selectFormat('breaking', this)">⚡ كبشن / عاجل (10 كلمات)</button>
-              <button class="pill" onclick="selectFormat('proofread', this)">🩺 تدقيق لغوي ومصطلحات فقط</button>
-            </div>
-
-            <div class="row-2" style="margin-bottom:10px;">
-              <div>
-                <label>2️⃣ الجبهة / التصنيف (يضبط المصطلحات تلقائياً):</label>
-                <select id="newsCategory">
-                  <option value="all">تلقائي من سياق الخبر</option>
-                  <option value="غزة">قطاع غزة (قوات العدو الصهيوني / حرب إبادة)</option>
-                  <option value="الضفة">الضفة الغربية (قوات الاحتلال الصهيوني / بلا أسماء معتقلين)</option>
-                  <option value="لبنان">جنوب لبنان / جبهات الإسناد</option>
-                  <option value="ميداني">ميداني عام</option>
-                  <option value="سياسي">سياسي ودولي</option>
-                </select>
-              </div>
-              <div>
-                <label>3️⃣ توجيه خاص لهذا الخبر فقط (اختياري):</label>
-                <input type="text" id="extraNote" placeholder="مثال: استهل بـ «وأفادت مصادر طبية»" />
-              </div>
+            <div style="margin-bottom:10px;">
+              <label>توجيه خاص لهذا الخبر فقط (اختياري):</label>
+              <input type="text" id="extraNote" placeholder="مثال: استهل بـ «وأفادت مصادر طبية»" />
             </div>
 
             <div class="radar-box" style="margin-bottom:12px;">
@@ -583,6 +562,6 @@
   </div>
 
   <div id="toast" class="toast"></div>
-  <script src="assets/app.js?v=18"></script>
+  <script src="assets/app.js?v=19"></script>
 </body>
 </html>
