@@ -12,9 +12,41 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="assets/style.css?v=30" />
+  <link rel="stylesheet" href="assets/style.css?v=31" />
 </head>
-<body>
+<body class="app-locked">
+  <!-- Full-Screen Password & 15-Min Idle Auto-Lock Gate -->
+  <div id="appLockOverlay" class="lock-overlay" role="dialog" aria-modal="true" aria-labelledby="lockTitleHeading">
+    <div class="lock-card" id="appLockCard">
+      <div class="brand-icon" style="width:52px; height:52px; font-size:24px; margin:0 auto 12px; border-radius:14px;">م</div>
+      <h2 id="lockTitleHeading" style="margin:0 0 6px; font-size:1.12rem; font-weight:800;">مِحْبَرَة الأخبار والشريط الإخباري</h2>
+      <p id="lockReasonText" class="muted-note" style="margin:0 0 14px; font-size:0.86rem; font-weight:700; color:var(--primary);">
+        🔒 أدخل كلمة المرور لفتح الصفحة
+      </p>
+      <input
+        type="password"
+        id="appLockInput"
+        class="lock-pin-input"
+        inputmode="numeric"
+        pattern="[0-9]*"
+        maxlength="12"
+        placeholder="••••••"
+        autocomplete="off"
+        oninput="handleLockInputLive(this.value)"
+        onkeydown="if(event.key==='Enter') attemptAppUnlock(true)"
+      />
+      <div id="lockErrorMsg" style="display:none; margin-top:8px; color:var(--danger); font-size:0.83rem; font-weight:800;">
+        ⚠️ كلمة المرور غير صحيحة
+      </div>
+      <button class="btn btn-primary" style="width:100%; margin-top:14px; padding:11px; font-size:0.95rem;" onclick="attemptAppUnlock(true)">
+        🔓 فتح الصفحة
+      </button>
+      <div class="muted-note" style="margin-top:12px; font-size:0.74rem;">
+        ⏱️ تُقفل الصفحة تلقائياً عند مرور 15 دقيقة بدون أي حركة
+      </div>
+    </div>
+  </div>
+
   <header class="topbar">
     <div class="topbar-inner">
       <div class="brand">
@@ -41,6 +73,7 @@
         <button class="icon-btn" onclick="exportBackup()">💾 تصدير JSON</button>
         <button class="icon-btn" onclick="document.getElementById('importFile').click()">📂 استيراد</button>
         <input type="file" id="importFile" accept=".json" style="display:none" onchange="importBackup(event)" />
+        <button class="icon-btn" onclick="lockPageNow('manual')" title="قفل الصفحة الآن بكلمة المرور">🔒 قفل</button>
         <button class="icon-btn" onclick="toggleTheme()" id="themeBtn">🌙 ليلي</button>
       </div>
     </div>
@@ -543,6 +576,6 @@
   </div>
 
   <div id="toast" class="toast"></div>
-  <script src="assets/app.js?v=30"></script>
+  <script src="assets/app.js?v=31"></script>
 </body>
 </html>

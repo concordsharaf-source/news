@@ -994,11 +994,17 @@ async function callModel(engine, model, promptText, slotName = "") {
   };
 
   // 1. Try Vercel Serverless Bridge (/api/ai) when hosted on Vercel
+  if (isAppLocked()) {
+    throw new Error("🔒 الصفحة مقفلة — أدخل كلمة المرور أولاً");
+  }
   if (!isStaticHost) {
     try {
       const bridgeRes = await fetch("/api/ai", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-newsroom-auth": activeSessionAuthHash
+        },
         body: JSON.stringify({ engine, model, prompt: promptText, apiKey })
       });
       const ct = bridgeRes.headers.get("content-type") || "";
@@ -2730,14 +2736,14 @@ function setupPwaFeatures() {
   // Purge any old v1-v4 PWA caches automatically so updates apply immediately!
   if ("caches" in window) {
     caches.keys().then(keys => {
-      keys.filter(k => k !== "mihbarah-pwa-v30").forEach(k => caches.delete(k));
+      keys.filter(k => k !== "mihbarah-pwa-v31").forEach(k => caches.delete(k));
     }).catch(() => {});
   }
 
   // 1. Register Service Worker
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js?v=30").then(reg => {
+      navigator.serviceWorker.register("sw.js?v=31").then(reg => {
         reg.update().catch(() => {});
       }).catch(() => {});
     });
@@ -2805,5 +2811,231 @@ async function installPwaApp() {
   }
 }
 
+// =========================================================================
+// Page Password Gate & 15-Minute Inactivity Auto-Lock
+// =========================================================================
+const LOCK_SALT = "MihbarahGate2026#YemenLock!v1";
+const EXPECTED_PIN_HASH = "38f2f2983774d8c31c483568e278bee3b2b3bc87d497d16ab583ef6a50e3fec9";
+const IDLE_LOCK_MS = 15 * 60 * 1000; // 15 minutes (900,000 ms)
+const LOCK_STORAGE_KEY = "nr_lock_session_v1";
+
+let activeSessionAuthHash = "";
+let lastActivityMemTs = 0;
+let lastActivitySavedTs = 0;
+let appInitialized = false;
+
+function sha256HexSync(str) {
+  const bytes = new TextEncoder().encode(str);
+  const K = [
+    0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+    0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+    0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+    0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+    0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+    0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+    0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+    0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
+  ];
+  let h0=0x6a09e667,h1=0xbb67ae85,h2=0x3c6ef372,h3=0xa54ff53a,h4=0x510e527f,h5=0x9b05688c,h6=0x1f83d9ab,h7=0x5be0cd19;
+  const bitLen = bytes.length * 8;
+  const padLen = ((bytes.length + 9 + 63) >> 6) << 6;
+  const buf = new Uint8Array(padLen);
+  buf.set(bytes);
+  buf[bytes.length] = 0x80;
+  const dv = new DataView(buf.buffer);
+  dv.setUint32(padLen - 4, bitLen >>> 0, false);
+  dv.setUint32(padLen - 8, Math.floor(bitLen / 0x100000000), false);
+  const w = new Int32Array(64);
+  const rotr = (x, n) => (x >>> n) | (x << (32 - n));
+  for (let i = 0; i < padLen; i += 64) {
+    for (let j = 0; j < 16; j++) w[j] = dv.getInt32(i + j * 4, false);
+    for (let j = 16; j < 64; j++) {
+      const s0 = rotr(w[j-15],7) ^ rotr(w[j-15],18) ^ (w[j-15] >>> 3);
+      const s1 = rotr(w[j-2],17) ^ rotr(w[j-2],19) ^ (w[j-2] >>> 10);
+      w[j] = (w[j-16] + s0 + w[j-7] + s1) | 0;
+    }
+    let a=h0,b=h1,c=h2,d=h3,e=h4,f=h5,g=h6,h=h7;
+    for (let j = 0; j < 64; j++) {
+      const S1 = rotr(e,6) ^ rotr(e,11) ^ rotr(e,25);
+      const ch = (e & f) ^ (~e & g);
+      const t1 = (h + S1 + ch + K[j] + w[j]) | 0;
+      const S0 = rotr(a,2) ^ rotr(a,13) ^ rotr(a,22);
+      const maj = (a & b) ^ (a & c) ^ (b & c);
+      const t2 = (S0 + maj) | 0;
+      h=g; g=f; f=e; e=(d + t1)|0; d=c; c=b; b=a; a=(t1 + t2)|0;
+    }
+    h0=(h0+a)|0; h1=(h1+b)|0; h2=(h2+c)|0; h3=(h3+d)|0; h4=(h4+e)|0; h5=(h5+f)|0; h6=(h6+g)|0; h7=(h7+h)|0;
+  }
+  return [h0,h1,h2,h3,h4,h5,h6,h7].map(v => (v >>> 0).toString(16).padStart(8,"0")).join("");
+}
+
+function normalizeLockDigits(raw) {
+  const arNums = "٠١٢٣٤٥٦٧٨٩";
+  return String(raw || "")
+    .replace(/[٠-٩]/g, d => String(arNums.indexOf(d)))
+    .trim();
+}
+
+function isAppLocked() {
+  return document.body.classList.contains("app-locked") || activeSessionAuthHash !== EXPECTED_PIN_HASH;
+}
+
+function ensureAppInitialized() {
+  if (!appInitialized) {
+    appInitialized = true;
+    init();
+  }
+}
+
+function recordUserActivity() {
+  if (isAppLocked()) return;
+  const now = Date.now();
+  // Before extending activity, check if 15 min ALREADY elapsed (e.g. waking up sleeping mobile tab!)
+  if (lastActivityMemTs > 0 && (now - lastActivityMemTs) >= IDLE_LOCK_MS) {
+    lockPageNow("idle");
+    return;
+  }
+  lastActivityMemTs = now;
+  if (now - lastActivitySavedTs >= 3000) {
+    lastActivitySavedTs = now;
+    SafeStorage.set(LOCK_STORAGE_KEY, { tokenHash: EXPECTED_PIN_HASH, lastActivityAt: now });
+  }
+}
+
+function unlockAppSession() {
+  const now = Date.now();
+  activeSessionAuthHash = EXPECTED_PIN_HASH;
+  lastActivityMemTs = now;
+  lastActivitySavedTs = now;
+  SafeStorage.set(LOCK_STORAGE_KEY, { tokenHash: EXPECTED_PIN_HASH, lastActivityAt: now });
+
+  document.body.classList.remove("app-locked");
+  const inp = document.getElementById("appLockInput");
+  const errEl = document.getElementById("lockErrorMsg");
+  if (inp) inp.value = "";
+  if (errEl) errEl.style.display = "none";
+
+  ensureAppInitialized();
+}
+
+function lockPageNow(reason = "idle") {
+  activeSessionAuthHash = "";
+  lastActivityMemTs = 0;
+  lastActivitySavedTs = 0;
+  SafeStorage.remove(LOCK_STORAGE_KEY);
+
+  if (document.activeElement && typeof document.activeElement.blur === "function") {
+    document.activeElement.blur();
+  }
+  const modal = document.getElementById("promptModal");
+  if (modal) modal.style.display = "none";
+
+  document.body.classList.add("app-locked");
+  const reasonEl = document.getElementById("lockReasonText");
+  const errEl = document.getElementById("lockErrorMsg");
+  const inp = document.getElementById("appLockInput");
+
+  if (errEl) errEl.style.display = "none";
+  if (reasonEl) {
+    if (reason === "idle") {
+      reasonEl.textContent = "⏱️ تم قفل الصفحة تلقائياً لمرور 15 دقيقة بدون أي حركة";
+      reasonEl.style.color = "var(--warn)";
+    } else if (reason === "manual") {
+      reasonEl.textContent = "🔒 تم قفل الصفحة — أدخل كلمة المرور للمتابعة";
+      reasonEl.style.color = "var(--primary)";
+    } else {
+      reasonEl.textContent = "🔒 أدخل كلمة المرور لفتح الصفحة";
+      reasonEl.style.color = "var(--primary)";
+    }
+  }
+  if (inp) {
+    inp.value = "";
+    setTimeout(() => inp.focus(), 60);
+  }
+}
+
+function handleLockInputLive(val) {
+  const errEl = document.getElementById("lockErrorMsg");
+  if (errEl) errEl.style.display = "none";
+  const clean = normalizeLockDigits(val);
+  if (clean.length >= 6) {
+    const candidateHash = sha256HexSync(`${LOCK_SALT}:${clean}`);
+    if (candidateHash === EXPECTED_PIN_HASH) {
+      unlockAppSession();
+    }
+  }
+}
+
+function attemptAppUnlock(fromSubmit) {
+  const inp = document.getElementById("appLockInput");
+  const errEl = document.getElementById("lockErrorMsg");
+  const card = document.getElementById("appLockCard");
+  const clean = normalizeLockDigits(inp?.value || "");
+  const candidateHash = sha256HexSync(`${LOCK_SALT}:${clean}`);
+
+  if (candidateHash === EXPECTED_PIN_HASH) {
+    unlockAppSession();
+    return;
+  }
+  if (fromSubmit) {
+    if (errEl) errEl.style.display = "block";
+    if (card) {
+      card.classList.remove("lock-shake");
+      void card.offsetWidth;
+      card.classList.add("lock-shake");
+    }
+    if (inp) {
+      inp.focus();
+      inp.select();
+    }
+  }
+}
+
+function checkIdleAutoLock() {
+  if (isAppLocked()) return;
+  const saved = SafeStorage.get(LOCK_STORAGE_KEY, null);
+  if (!saved || saved.tokenHash !== EXPECTED_PIN_HASH) {
+    lockPageNow("manual");
+    return;
+  }
+  const latestTs = Math.max(lastActivityMemTs || 0, Number(saved.lastActivityAt || 0));
+  if (!latestTs || (Date.now() - latestTs) >= IDLE_LOCK_MS) {
+    lockPageNow("idle");
+  } else {
+    lastActivityMemTs = latestTs;
+  }
+}
+
+function setupLockGuard() {
+  if (state.theme === "dark") {
+    document.documentElement.setAttribute("data-theme", "dark");
+    const tBtn = document.getElementById("themeBtn");
+    if (tBtn) tBtn.textContent = "☀️ نهاري";
+  }
+
+  const saved = SafeStorage.get(LOCK_STORAGE_KEY, null);
+  const now = Date.now();
+  if (saved && saved.tokenHash === EXPECTED_PIN_HASH && (now - Number(saved.lastActivityAt || 0)) < IDLE_LOCK_MS) {
+    unlockAppSession();
+  } else {
+    const wasExpired = !!(saved && saved.tokenHash === EXPECTED_PIN_HASH);
+    lockPageNow(wasExpired ? "idle" : "initial");
+  }
+
+  ["mousemove", "mousedown", "keydown", "touchstart", "scroll", "click", "input", "pointerdown"].forEach(evt => {
+    window.addEventListener(evt, recordUserActivity, { passive: true, capture: true });
+  });
+
+  setInterval(checkIdleAutoLock, 4000);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) checkIdleAutoLock();
+  });
+  window.addEventListener("focus", checkIdleAutoLock);
+  window.addEventListener("pageshow", checkIdleAutoLock);
+  window.addEventListener("storage", (e) => {
+    if (e.key === LOCK_STORAGE_KEY) checkIdleAutoLock();
+  });
+}
+
 setupPwaFeatures();
-init();
+setupLockGuard();

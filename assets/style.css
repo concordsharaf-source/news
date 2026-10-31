@@ -214,3 +214,63 @@ label { display: block; font-size: 0.82rem; font-weight: 700; margin-bottom: 4px
   box-shadow: 0 8px 25px rgba(0,0,0,0.28); display: none; z-index: 999;
 }
 .toast.show { display: block; }
+
+/* Page Password Gate & 15-Minute Auto-Lock */
+body.app-locked {
+  overflow: hidden !important;
+  height: 100vh;
+}
+body.app-locked .topbar,
+body.app-locked main.container,
+body.app-locked #promptModal {
+  visibility: hidden !important;
+  pointer-events: none !important;
+  user-select: none !important;
+}
+.lock-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: radial-gradient(circle at top, #115e59 0%, #0b1120 74%);
+}
+body.app-locked .lock-overlay {
+  display: flex;
+}
+.lock-card {
+  width: 100%;
+  max-width: 400px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 26px 22px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+  text-align: center;
+}
+.lock-pin-input {
+  width: 100%;
+  text-align: center;
+  direction: ltr;
+  letter-spacing: 10px;
+  font-size: 1.5rem !important;
+  font-weight: 800;
+  padding: 12px 14px !important;
+  border: 2px solid var(--border) !important;
+  border-radius: 12px !important;
+  margin-top: 8px;
+}
+.lock-pin-input:focus {
+  border-color: var(--primary) !important;
+}
+@keyframes lockShakeAnim {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-8px); }
+  40%, 80% { transform: translateX(8px); }
+}
+.lock-shake {
+  animation: lockShakeAnim 0.35s ease;
+}

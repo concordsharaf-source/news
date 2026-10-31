@@ -117,13 +117,20 @@ async function tryAllKeylessRoutes(preferred, prompt) {
   return { ok: false, error: lastErr?.message || "timeout" };
 }
 
+const EXPECTED_GATE_HASH = "38f2f2983774d8c31c483568e278bee3b2b3bc87d497d16ab583ef6a50e3fec9";
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, x-newsroom-auth");
 
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
+
+  const authHeader = String(req.headers["x-newsroom-auth"] || "").trim();
+  if (authHeader !== EXPECTED_GATE_HASH) {
+    return res.status(401).json({ error: "🔒 انتهت الجلسة أو الصفحة مقفلة — أدخل كلمة المرور لفتح الصفحة." });
+  }
 
   try {
     const { engine, model, prompt, apiKey } = req.body || {};
