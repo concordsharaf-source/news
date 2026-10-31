@@ -1,4 +1,4 @@
-const CACHE_VERSION = "mihbarah-pwa-v29";
+const CACHE_VERSION = "mihbarah-pwa-v30";
 const APP_SHELL = [
   "/",
   "/index.html",

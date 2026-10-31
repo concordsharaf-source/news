@@ -131,14 +131,23 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "البرومبت مفقود" });
     }
 
+    const vaultKeys = readSharedVaultKeys();
+    const envKeys = {
+      gemini: process.env.GEMINI_API_KEY || vaultKeys.gemini || "",
+      groq: process.env.GROQ_API_KEY || vaultKeys.groq || "",
+      openrouter: process.env.OPENROUTER_API_KEY || vaultKeys.openrouter || ""
+    };
+
     // =====================================================================
     // 1. INSTANT FREE (100% Keyless, Zero Account, Zero Credit Card!)
     // =====================================================================
-    if (!engine || engine === "instant_free" || model === "ovh-meta-llama-3.3-70b" || model === "nemotron-550b") {
-      const targetRoute = model === "ovh-meta-llama-3.3-70b" ? "llama-3.3-70b" : (model || "qwen-397b");
+    let effectiveEngine = engine;
+    let effectiveModel = model;
+    if (!effectiveEngine || effectiveEngine === "instant_free" || effectiveModel === "ovh-meta-llama-3.3-70b" || effectiveModel === "nemotron-550b") {
+      const targetRoute = effectiveModel === "ovh-meta-llama-3.3-70b" ? "llama-3.3-70b" : (effectiveModel || "qwen-397b");
       const resKeyless = await tryAllKeylessRoutes(targetRoute, prompt);
       if (resKeyless.ok) {
-        const keepGroqLlama = engine === "groq" && model === "ovh-meta-llama-3.3-70b" && resKeyless.usedRoute === "llama-3.3-70b";
+        const keepGroqLlama = effectiveEngine === "groq" && effectiveModel === "ovh-meta-llama-3.3-70b" && resKeyless.usedRoute === "llama-3.3-70b";
         return res.status(200).json({
           text: resKeyless.text,
           usedRoute: resKeyless.usedRoute,
@@ -146,31 +155,29 @@ export default async function handler(req, res) {
           usedModel: keepGroqLlama ? "ovh-meta-llama-3.3-70b" : resKeyless.usedRoute
         });
       }
-      if (!engine || engine === "instant_free") {
+      // Seamless server-side failover to Groq free pool if OVH keyless hits 2 req/min during multi-stage editing
+      if ((!effectiveEngine || effectiveEngine === "instant_free") && envKeys.groq) {
+        effectiveEngine = "groq";
+        effectiveModel = "openai/gpt-oss-120b";
+      } else if (!effectiveEngine || effectiveEngine === "instant_free") {
         return res.status(502).json({
           error: `جميع المحركات الفورية مشغولة حالياً (${resKeyless.error}). أعد المحاولة بعد ثوانٍ.`
         });
       }
     }
 
-    const vaultKeys = readSharedVaultKeys();
-    const envKeys = {
-      gemini: process.env.GEMINI_API_KEY || vaultKeys.gemini || "",
-      groq: process.env.GROQ_API_KEY || vaultKeys.groq || "",
-      openrouter: process.env.OPENROUTER_API_KEY || vaultKeys.openrouter || ""
-    };
-    const effectiveKey = (apiKey || envKeys[engine] || "").trim();
+    const effectiveKey = (apiKey || envKeys[effectiveEngine] || "").trim();
 
     if (!effectiveKey) {
       return res.status(400).json({
-        error: `لم يتم إدخال مفتاح ${engine.toUpperCase()} بعد. اختر المحرك الأول «🟢 مجاني فوري 100%» للتحرير المباشر بدون أي مفتاح!`
+        error: `لم يتم إدخال مفتاح ${String(effectiveEngine || "").toUpperCase()} بعد. اختر المحرك الأول «🟢 مجاني فوري 100%» للتحرير المباشر بدون أي مفتاح!`
       });
     }
 
     // =====================================================================
     // 2. Google Gemini API
     // =====================================================================
-    if (engine === "gemini") {
+    if (effectiveEngine === "gemini") {
       async function tryGeminiModel(targetModel, useLowThinking) {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(targetModel)}:generateContent?key=${encodeURIComponent(effectiveKey)}`;
         const generationConfig = { temperature: 0.1 };
@@ -189,19 +196,19 @@ export default async function handler(req, res) {
         return { ok: r.ok, status: r.status, data: d };
       }
 
-      let finalGemModel = model;
-      let attempt = await tryGeminiModel(model, true);
+      let finalGemModel = effectiveModel;
+      let attempt = await tryGeminiModel(effectiveModel, true);
       if (!attempt.ok) {
         const errMsg = attempt.data?.error?.message || "";
         if (errMsg.toLowerCase().includes("thinking")) {
-          attempt = await tryGeminiModel(model, false);
+          attempt = await tryGeminiModel(effectiveModel, false);
         }
       }
       if (!attempt.ok) {
         const errMsg = attempt.data?.error?.message || "";
         const match = errMsg.match(/models\/(gemini-[a-zA-Z0-9.-]+)/);
-        const suggested = match ? match[1] : (model !== "gemini-3.8-flash" ? "gemini-3.8-flash" : "gemini-3.5-flash-lite");
-        if (suggested && suggested !== model) {
+        const suggested = match ? match[1] : (effectiveModel !== "gemini-3.8-flash" ? "gemini-3.8-flash" : "gemini-3.5-flash-lite");
+        if (suggested && suggested !== effectiveModel) {
           attempt = await tryGeminiModel(suggested, true);
           if (attempt.ok) finalGemModel = suggested;
         }
@@ -217,7 +224,7 @@ export default async function handler(req, res) {
     // =====================================================================
     // 3. Groq API (Active Oct 2026 Free Tier + Auto-Remap + Failover!)
     // =====================================================================
-    if (engine === "groq") {
+    if (effectiveEngine === "groq") {
       const retiredToActive = {
         "meta-llama/llama-4-scout-17b-16e-instruct": "openai/gpt-oss-120b",
         "meta-llama/llama-4-maverick-17b-128e-instruct": "openai/gpt-oss-120b",
@@ -227,7 +234,7 @@ export default async function handler(req, res) {
         "qwen/qwen3.6-27b": "qwen/qwen3.8-27b"
       };
       const activeGroqPool = ["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b"];
-      const primaryGroqModel = retiredToActive[model] || (model && !model.includes("llama") ? model : "openai/gpt-oss-120b");
+      const primaryGroqModel = retiredToActive[effectiveModel] || (effectiveModel && !effectiveModel.includes("llama") ? effectiveModel : "openai/gpt-oss-120b");
       const candidates = [primaryGroqModel, ...activeGroqPool.filter(m => m !== primaryGroqModel)];
 
       async function callSingleGroq(targetModel, minimal = false) {
@@ -286,8 +293,8 @@ export default async function handler(req, res) {
     // =====================================================================
     // 4. OpenRouter Free API (with automatic fallback to keyless 397B pool if overloaded)
     // =====================================================================
-    if (engine === "openrouter") {
-      const orCandidates = [model, "openrouter/free"].filter((v, i, arr) => v && arr.indexOf(v) === i);
+    if (effectiveEngine === "openrouter") {
+      const orCandidates = [effectiveModel, "openrouter/free"].filter((v, i, arr) => v && arr.indexOf(v) === i);
       let lastOrErr = "";
       for (const orModel of orCandidates) {
         const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {

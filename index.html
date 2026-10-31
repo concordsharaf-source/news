@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="assets/style.css?v=29" />
+  <link rel="stylesheet" href="assets/style.css?v=30" />
 </head>
 <body>
   <header class="topbar">
@@ -103,6 +103,10 @@
                 <span><strong>المراجعة المزدوجة</strong></span>
               </label>
               <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text); margin-top:4px;">
+                <input type="checkbox" id="thirdStageToggle" checked style="width:16px; height:16px;" />
+                <span>🛡️ <strong>الطبقة الثالثة (مطابقة النمط المستلهم والتعديلات السابقة وفحص المصطلحات والممنوعات)</strong></span>
+              </label>
+              <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text); margin-top:4px;">
                 <input type="checkbox" id="compareModeToggle" onchange="toggleCompareUI()" style="width:16px; height:16px;" />
                 <span>⚖️ <strong>مقارنة نموذجين معاً جنباً إلى جنب</strong></span>
               </label>
@@ -191,9 +195,12 @@
 
             <!-- Strict Editorial Policy Radar -->
             <div class="radar-box">
-              <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
                 <strong style="font-size:0.88rem;">🛡️ رادار الالتزام بالسياسة التحريرية (القالب + الأرقام بالحروف + المصطلحات + الإملاء)</strong>
-                <span id="radarSummaryBadge" class="chip chip-ok">جاهز</span>
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <button class="btn btn-outline btn-sm" id="runThirdLayerOnlyBtn" onclick="runThirdLayerOnly()" title="تشغيل الطبقة الثالثة وحدها لمطابقة النمط المستلهم والتعديلات وفحص وإصلاح المصطلحات والممنوعات" style="padding:3px 9px; font-size:0.75rem;">🛡️ مطابقة وإصلاح بالطبقة الثالثة</button>
+                  <span id="radarSummaryBadge" class="chip chip-ok">جاهز</span>
+                </div>
               </div>
               <div style="margin-top:8px;">
                 <div class="muted-note">📐 <strong>فحص القالب الفني (فاصل lvo، الكبشن، الأرقام بالحروف، المائة):</strong></div>
@@ -536,6 +543,6 @@
   </div>
 
   <div id="toast" class="toast"></div>
-  <script src="assets/app.js?v=29"></script>
+  <script src="assets/app.js?v=30"></script>
 </body>
 </html>

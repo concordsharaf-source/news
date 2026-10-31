@@ -638,6 +638,243 @@ ${draftText}
 }
 
 // =========================================================================
+// Stage 3: Deep Compliance Layer (Distilled Style + Past Edits + Terms & Prohibitions)
+// =========================================================================
+function collectDeepNewsViolations(draftText, rawText = "") {
+  const findings = [];
+  const combinedCtx = `${draftText}\n${rawText}`;
+
+  // 1. Numeric digits remaining
+  const foundDigits = draftText.match(/[0-9٠-٩]+/g);
+  if (foundDigits) {
+    findings.push(`بقيت أرقام بالرموز الرقمية (${[...new Set(foundDigits)].join("، ")}) — حوّلها جميعاً إلى حروف عربية مضبوطة إعرابياً.`);
+  }
+
+  // 2. "مئة" without alif
+  const badMia = draftText.match(/(^|[\s«"(])(مئة|مئتان|مئتين|ثلاثمئة|أربعمئة|خمسمئة|ستمئة|سبعمئة|ثمانمئة|تسعمئة)(?=[\s،.:؛»")!]|$)/g);
+  if (badMia) {
+    findings.push(`كُتبت المائة بدون ألف (${badMia.map(s => s.trim()).join("، ")}) — اكتبها بالألف دائماً: مائة، مائتان، ثلاثمائة... تسعمائة.`);
+  }
+
+  // 3. Complete Dictionary scan
+  state.dictionary.forEach(({ bad, good }) => {
+    if (bad && draftText.includes(bad)) {
+      findings.push(`مصطلح ممنوع في القاموس: «${bad}» ⬅ استبدله فوراً بالمعتمد: «${good}».`);
+    }
+  });
+
+  // 4. Forbidden temporal words, days of week, Syriac months, clock hours, URLs
+  const forbiddenTimes = [
+    "اليوم", "أمس", "امس", "الليلة الماضية", "الأسبوع الماضي", "الاسبوع الماضي",
+    "الشهر الماضي", "العام الماضي", "صباح اليوم", "مساء اليوم", "فجر اليوم", "ظهر اليوم",
+    "مساء أمس", "فجر أمس", "صباح أمس"
+  ];
+  forbiddenTimes.forEach(w => {
+    const re = new RegExp(`(^|[\\s،.:؛«"(])${w}(?=[\\s،.:؛»")!]|$)`, "g");
+    if (re.test(draftText)) {
+      findings.push(`ظرف زمني ممنوع: «${w}» — احذفه تماماً (أو استبدله عند الضرورة القصوى فقط بـ «في وقت سابق» أو «خلال الساعات الماضية»).`);
+    }
+  });
+
+  const weekDays = ["السبت", "الأحد", "الإثنين", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة"];
+  weekDays.forEach(day => {
+    const re = new RegExp(`(^|[\\s،.:؛«"(])(يوم\\s+)?${day}(?=[\\s،.:؛»")!]|$)`, "g");
+    if (re.test(draftText)) {
+      findings.push(`اسم يوم ممنوع ذكره في الخبر: «${day}» — احذف الأيام والتواريخ نهائياً.`);
+    }
+  });
+
+  const syriacMonths = [
+    "كانون الثاني", "شباط", "آذار", "نيسان", "أيار", "حزيران",
+    "تموز", "آب", "أيلول", "تشرين الأول", "تشرين الثاني", "كانون الأول"
+  ];
+  syriacMonths.forEach(m => {
+    const re = new RegExp(`(^|[\\s،.:؛«"(])${m}(?=[\\s،.:؛»")!]|$)`, "g");
+    if (re.test(draftText)) {
+      findings.push(`شهر سرياني ممنوع: «${m}» — احذف التواريخ والأشهر السريانية نهائياً.`);
+    }
+  });
+
+  if (/(^|\s)الساعة\s+\S+/.test(draftText) || /بتوقيت\s+(القدس|مكة|غرينتش|القاهرة|غزة|صنعاء)/.test(draftText)) {
+    findings.push(`ذُكرت ساعات أو توقيت زمني في النص — احذف الساعات والتوقيتات تماماً.`);
+  }
+  if (/(https?:\/\/\S+|www\.\S+|t\.me\/\S+)/i.test(draftText)) {
+    findings.push(`يوجد رابط إلكتروني في الخبر — احذفه تماماً.`);
+  }
+
+  // 5. Geographic directions (compound directions + unnecessary directional details per editor's rule)
+  const compDirs = ["شمال شرق", "شمال غرب", "جنوب شرق", "جنوب غرب", "شمالي شرق", "شمالي غرب", "جنوبي شرق", "جنوبي غرب"];
+  compDirs.forEach(d => {
+    if (draftText.includes(d)) {
+      findings.push(`اتجاه جغرافي مركب ممنوع: «${d}» — احذف تفاصيل الاتجاهات واكتفِ باسم المنطقة فقط.`);
+    }
+  });
+
+  const banGeneralDirsRule = state.newsRules.some(r => r.active && /تفاصيل الاتجاهات/.test(r.text || ""));
+  if (banGeneralDirsRule) {
+    const dirBeforePlace = draftText.match(/(^|[\s،])(شمال|جنوب|شرق|غرب|شمالي|جنوبي|شرقي|غربي)\s+(بلدة|قرية|مدينة|مخيم|حي|منطقة|محافظة|مفترق)/g);
+    const dirBeforeCity = draftText.match(/(^|[\s،])(شمالي|جنوبي|شرقي|غربي)\s+[أ-ي]{3,}/g);
+    if (dirBeforePlace || dirBeforeCity) {
+      findings.push(`وُجدت تفاصيل اتجاهات جغرافية زائدة (${[...(dirBeforePlace || []), ...(dirBeforeCity || [])].slice(0, 4).map(s => s.trim()).join("، ")}) — وفق تعديلاتك المعتمدة: احذف تفاصيل الاتجاهات (شمال/جنوب/شرق/غرب/شمالي/جنوبي/شرقي/غربي) واكتفِ باسم المنطقة أو البلدة أو المحافظة مباشرة (مع الحفاظ فقط على الأسماء الجيوسياسية الثابتة مثل «الضفة الغربية» أو «جنوب لبنان»).`);
+    }
+  }
+
+  // 6. Agencies, correspondents & original source attribution
+  const agencies = ["رويترز", "فرانس برس", "الأناضول", "أسوشيتد برس", "وكالة وفا", "وفا", "مراسلنا", "أفاد مراسل", "بحسب صحيفة", "وفق موقع", "وفقاً لوكالة"];
+  agencies.forEach(ag => {
+    const re = new RegExp(`(^|[\\s،.:؛«"(])${ag}(?=[\\s،.:؛»")!]|$)`, "g");
+    if (re.test(draftText)) {
+      findings.push(`ذُكر مصدر أو وكالة أو مراسل ممنوع: «${ag}» — احذفه واستخدم الصيغ المعتمدة فقط («مصادر إعلامية» / «مصادر طبية»).`);
+    }
+  });
+
+  // 7. Palestinian & Front-specific terminology
+  if (/إسرائيل/.test(draftText)) {
+    findings.push(`وُجد لفظ «إسرائيل/إسرائيلي» الممنوع — استبدله بـ «كيان العدو الصهيوني / صهيوني / صهيونية / صهاينة».`);
+  }
+
+  const isPal = /(غزة|الضفة|القدس|فلسطين|جنين|نابلس|طولكرم|الخليل|رام الله|قلقيلية|بيت لحم|رفح|خان يونس|جباليا|النصيرات|دير البلح|الشجاعية)/.test(combinedCtx);
+  const isGaza = /(غزة|رفح|خان يونس|جباليا|النصيرات|دير البلح|الشجاعية)/.test(combinedCtx);
+  const isWestBank = /(الضفة|جنين|نابلس|طولكرم|الخليل|رام الله|قلقيلية|بيت لحم|طوباس|سلفيت|أريحا)/.test(combinedCtx);
+
+  if (isPal && /(^|[\s،.:؛«"(])(ال)?مواطن(ين|ون|ان|ة|ات|اً|ًا)?(?=[\s،.:؛»")!]|$)/.test(draftText)) {
+    findings.push(`وُجد لفظ «مواطن/مواطنين» في خبر فلسطيني — القاعدة الصارمة: استبدله فوراً بـ «فلسطيني/فلسطينيين/الفلسطينيين».`);
+  }
+  if (isPal && /(^|[\s،.:؛«"(])(مقتل|قُتل|قتلوا|قتلى|قتيل)(?=[\s،.:؛»")!]|$)/.test(draftText)) {
+    findings.push(`وُجد لفظ «مقتل/قُتل/قتلى» في خبر فلسطيني — استبدله بـ «استشهاد/استشهد/شهداء».`);
+  }
+  if (isGaza && !isWestBank && draftText.includes("قوات الاحتلال")) {
+    findings.push(`في أخبار قطاع غزة يُمنع «قوات الاحتلال» — المعتمد حصراً: «قوات العدو الصهيوني».`);
+  }
+  if (isWestBank && !isGaza && draftText.includes("قوات العدو")) {
+    findings.push(`في أخبار الضفة الغربية المعتمد حصراً: «قوات الاحتلال الصهيوني».`);
+  }
+  if (isWestBank && /(اعتقلت|اعتقال)\s+([^\n.،]{3,55})/.test(draftText)) {
+    findings.push(`تحقق بصرامة في خبر الضفة الغربية: إذا وُجدت أسماء شخصية لمعتقلين فاحذف الأسماء نهائياً واكتفِ بعددهم أو صفتهم العامة (مثل: عدداً من الفلسطينيين / ثلاثة شبان).`);
+  }
+
+  // 8. Movement names ("الإسلامية" forbidden in movement names) + word bans + passive voice
+  if (/حركة المقاومة الإسلامية|حركة الجهاد الإسلامي/.test(draftText)) {
+    findings.push(`احذف كلمة «الإسلامية / الإسلامي» من اسم الحركة (اكتب: حركة حماس / حركة الجهاد).`);
+  }
+  if (draftText.includes("إلى جانب")) {
+    findings.push(`عبارة «إلى جانب» ممنوعة ⬅ استبدلها بـ «إضافة إلى».`);
+  }
+  if (/(^|[\s،.:؛«"(])جراء(?=[\s،.:؛»")!]|$)/.test(draftText)) {
+    findings.push(`كلمة «جراء» ممنوعة ⬅ استبدلها بـ «نتيجة».`);
+  }
+  if (/(^|[\s،.:؛«"(])دهم(?=[\s،.:؛»")!]|$)/.test(draftText)) {
+    findings.push(`كلمة «دهم» ممنوعة ⬅ استبدلها بـ «مداهمة».`);
+  }
+  if (/(^|\n|،\s*)تم\s+[أ-ي]{4,}/.test(draftText)) {
+    findings.push(`وُجدت صياغة مبنية للمجهول بـ «تم + مصدر» — حوّلها فوراً إلى فعل مبني للمعلوم.`);
+  }
+
+  // 9. Structure & lvo checks
+  if (state.selectedFormat === "lvo_standard") {
+    if (!/(^|\n)\s*lvo\s*(\n|$)/i.test(draftText)) {
+      findings.push(`الفاصل الإلزامي (lvo) مفقود أو ليس على سطر مستقل بعد فقرة المقدمة — ضعه في سطر مستقل تماماً.`);
+    }
+    if (!draftText.includes("وأفادت مصادر إعلامية") && !draftText.includes("وأفادت مصادر طبية")) {
+      findings.push(`الفقرة التالية لفاصل (lvo) يجب أن تبدأ بـ «وأفادت مصادر إعلامية أن...» أو «وأفادت مصادر طبية أن...».`);
+    }
+  }
+
+  return findings;
+}
+
+function buildThirdLayerNewsPrompt(rawText, draftText) {
+  const activeNewsRules = state.newsRules.filter(r => r.active);
+  const distilledStyleRules = activeNewsRules
+    .filter(r => r.category === "نمط مستلهم")
+    .map((r, i) => `${i + 1}. ${r.text}`)
+    .join("\n");
+
+  const previousEditorCustomRules = activeNewsRules
+    .filter(r => r.category !== "نمط مستلهم" && /^rule-\d+$/.test(r.id || ""))
+    .map((r, i) => `${i + 1}. ${r.text}`)
+    .join("\n");
+
+  const coreHouseRules = activeNewsRules
+    .filter(r => r.category !== "نمط مستلهم" && !/^rule-\d+$/.test(r.id || ""))
+    .map((r, i) => `${i + 1}. ${r.text}`)
+    .join("\n");
+
+  const fullDictBlock = state.dictionary
+    .map(d => `«${d.bad}» ⬅ «${d.good}»`)
+    .join(" | ");
+
+  const detectedViolations = collectDeepNewsViolations(draftText, rawText);
+  const violationsSection = detectedViolations.length > 0
+    ? `🚨 رصد الفحص الآلي المخالفات الفعلية التالية في المسودة الحالية — يجب إصلاحها جميعاً بنسبة 100% دون استثناء:\n${detectedViolations.map((v, i) => `${i + 1}. ${v}`).join("\n")}`
+    : `✔ لم يرصد الفاحص السطحي أخطاءً آلية مباشرة؛ دقّق النص بعمق سطراً بسطر لمطابقة النمط المستلهم والتعديلات السابقة والتأكد من خلوه من أي مصطلح أو اتجاه أو ظرف زمني ممنوع خفي.`;
+
+  return `أنت رئيس التمحيص النهائي والرقابة الأسلوبية والمصطلحية (الطبقة الثالثة والأخيرة) في غرفة الأخبار.
+مهمتك المحددة والحصرية على <المسودة_الحالية> هي تنفيذ المهام الثلاث التالية بدقة جراحية دون إضافة أي معلومة من خارج <النص_الخام_الأصلي>:
+
+1️⃣ المهمة الأولى — مطابقة الخبر مع النمط المستلهم للأخبار:
+طبّق هذه الأنماط الأسلوبية المستلهمة على صياغة الجمل والعنوان وترتيب المعلومات وتكثيفها:
+${distilledStyleRules || "- التزم بالأسلوب الصحفي المكثف والمباشر الخالي من الحشو والخلفيات الطويلة."}
+
+2️⃣ المهمة الثانية — مطابقة الخبر مع التعديلات والملاحظات السابقة للمحرر (أولوية قصوى):
+تحقق حرفياً من التزام كل سطر في الخبر بهذه التعديلات والملاحظات التي اعتمدها المحرر مسبقاً:
+${previousEditorCustomRules || "- التزم بقالب الترويسة والكبشن والمقدمة الفعلية وفاصل lvo وصيغ المصادر."}
+
+3️⃣ المهمة الثالثة — فحص المصطلحات الثابتة والممنوعات وإصلاحها بالكامل:
+${violationsSection}
+
+<قاموس_المصطلحات_الثابتة_الكامل>
+${fullDictBlock}
+</قاموس_المصطلحات_الثابتة_الكامل>
+
+<قائمة_الممنوعات_الحمراء_وقواعد_الضبط>
+- يُمنع بقاء أي رقم بالرموز داخل الخبر (حوّل كل رقم إلى حروف عربية سليمة الإعراب، واكتب مائة..تسعمائة بالألف دائماً).
+- يُمنع وجود أي تاريخ أو يوم من أيام الأسبوع أو ساعة زمنية أو شهر سرياني أو رابط أو اسم وكالة أو مراسل أو اسم المصدر الأصلي.
+- يُمنع استخدام: (اليوم، أمس، الليلة الماضية، الأسبوع الماضي، إلى جانب، جراء، دهم، إسرائيلي، مواطن في الشأن الفلسطيني، مقتل مع الفلسطينيين، كلمة الإسلامية في أسماء الحركات، أسماء المعتقلين في الضفة الغربية، الاتجاهات المركبة أو تفاصيل الاتجاهات الزائدة، المبني للمجهول مثل تم استهداف).
+- حافظ على القالب المعتمد: السطر الأول المنطقة فقط بلا نقطة، ثم الكبشن بلا نقطة، ثم فقرة المقدمة الفعلية، ثم السطر المستقل (lvo)، ثم «وأفادت مصادر إعلامية/طبية أن...»، ثم «وأضافت المصادر أن...»، وبقية القواعد الأساسية:
+${coreHouseRules}
+</قائمة_الممنوعات_الحمراء_وقواعد_الضبط>
+
+<النص_الخام_الأصلي_للتحقق_من_المعلومات_فقط>
+${rawText}
+</النص_الخام_الأصلي_للتحقق_من_المعلومات_فقط>
+
+<المسودة_الحالية_المطلوب_مطابقتها_وإصلاحها>
+${draftText}
+</المسودة_الحالية_المطلوب_مطابقتها_وإصلاحها>
+
+أخرج الآن النص النهائي المطابق والمُصلَح بالكامل والجاهز للنشر فوراً دون أي مقدمات أو شروحات أو تعليقات.`;
+}
+
+function postPolishNewsOutput(text) {
+  if (!text || !text.trim()) return "";
+  let out = fixSingleArabicSegment(text, false);
+  // Ensure standalone lvo sits cleanly on its own trimmed line
+  out = out.replace(/[ \t]*\n[ \t]*lvo[ \t]*\n[ \t]*/gi, "\nlvo\n");
+
+  // Strip trailing period/comma on header line 1 and caption line(s) above the lead paragraph (while preserving speaker colon ":")
+  const lines = out.split("\n");
+  const lvoIdx = lines.findIndex(l => /^\s*lvo\s*$/i.test(l));
+  if (lvoIdx >= 2) {
+    // Find non-empty lines before lvo; the last long line before lvo is the lead paragraph, earlier short lines are region + caption
+    const nonEmptyBeforeLvo = [];
+    for (let i = 0; i < lvoIdx; i++) {
+      if (lines[i].trim()) nonEmptyBeforeLvo.push(i);
+    }
+    if (nonEmptyBeforeLvo.length >= 2) {
+      const leadLineIdx = nonEmptyBeforeLvo[nonEmptyBeforeLvo.length - 1];
+      for (const idx of nonEmptyBeforeLvo) {
+        if (idx < leadLineIdx && lines[idx].trim().split(/\s+/).length <= 18) {
+          lines[idx] = lines[idx].replace(/[.،؛]+\s*$/, "").trim();
+        }
+      }
+      out = lines.join("\n");
+    }
+  }
+  return out.trim();
+}
+
+// =========================================================================
 // Unified Model Caller (Vercel Bridge + Direct Fallback)
 // =========================================================================
 function extractPuterText(res) {
@@ -883,6 +1120,7 @@ async function runEditorialWorkflow() {
   const btn = document.getElementById("runAiBtn");
   const compareOn = document.getElementById("compareModeToggle").checked;
   const twoStageOn = document.getElementById("twoStageToggle").checked;
+  const thirdStageOn = document.getElementById("thirdStageToggle")?.checked !== false;
   const pEng = document.getElementById("primaryEngineSelect").value;
   const pMod = document.getElementById("primaryModelSelect").value;
   const sEng = document.getElementById("secondaryEngineSelect").value;
@@ -898,37 +1136,98 @@ async function runEditorialWorkflow() {
     if (compareOn) {
       setStatus("statusBar", "statusText", "info", "⏳ جاري تحرير الخبر عبر نموذجين للمقارنة...");
       const [resA, resB] = await Promise.allSettled([callModel(pEng, pMod, prompt, "primary"), callModel(sEng, sMod, prompt, "secondary")]);
-      const textA = resA.status === "fulfilled" ? cleanAiMetaText(resA.value) : `⚠️ ${resA.reason?.message}`;
-      const textB = resB.status === "fulfilled" ? cleanAiMetaText(resB.value) : `⚠️ ${resB.reason?.message}`;
+      const textA = resA.status === "fulfilled" ? postPolishNewsOutput(cleanAiMetaText(resA.value)) : `⚠️ ${resA.reason?.message}`;
+      const textB = resB.status === "fulfilled" ? postPolishNewsOutput(cleanAiMetaText(resB.value)) : `⚠️ ${resB.reason?.message}`;
       document.getElementById("compOutputA").value = textA;
       document.getElementById("compOutputB").value = textB;
-      if (resA.status === "fulfilled") document.getElementById("editedNewsOutput").value = textA;
-      else if (resB.status === "fulfilled") document.getElementById("editedNewsOutput").value = textB;
+      let chosen = "";
+      if (resA.status === "fulfilled") chosen = textA;
+      else if (resB.status === "fulfilled") chosen = textB;
+      if (chosen && thirdStageOn) {
+        setStatus("statusBar", "statusText", "info", "🛡️ الطبقة الثالثة: مطابقة النمط المستلهم والتعديلات وفحص المصطلحات والممنوعات...");
+        const curEng = document.getElementById("primaryEngineSelect").value;
+        const curMod = document.getElementById("primaryModelSelect").value;
+        chosen = postPolishNewsOutput(cleanAiMetaText(await callModel(curEng, curMod, buildThirdLayerNewsPrompt(raw, chosen), "primary")));
+      }
+      document.getElementById("editedNewsOutput").value = chosen;
       autoFixArabicErrors("editedNewsOutput", true);
       state.lastAiNewsDraft = document.getElementById("editedNewsOutput").value;
       runQualityRadar();
-      setStatus("statusBar", "statusText", "ok", "✅ اكتملت المقارنة!");
+      setStatus("statusBar", "statusText", "ok", "✅ اكتملت المقارنة والضبط النهائي!");
     } else {
-      setStatus("statusBar", "statusText", "info", "⏳ المرحلة 1: جاري صياغة الخبر بالقالب المعتمد...");
-      let draft = cleanAiMetaText(await callModel(pEng, pMod, prompt, "primary"));
+      const totalStages = 1 + (twoStageOn && state.selectedFormat !== "proofread" ? 1 : 0) + (thirdStageOn ? 1 : 0);
+      let stepNum = 1;
+
+      setStatus("statusBar", "statusText", "info", `⏳ المرحلة ${stepNum}/${totalStages}: جاري صياغة الخبر بالقالب المعتمد...`);
+      let draft = postPolishNewsOutput(cleanAiMetaText(await callModel(pEng, pMod, prompt, "primary")));
       document.getElementById("editedNewsOutput").value = draft;
       runQualityRadar();
 
       if (twoStageOn && state.selectedFormat !== "proofread") {
-        setStatus("statusBar", "statusText", "info", "🩺 المرحلة 2: المراجعة المزدوجة...");
+        stepNum++;
+        setStatus("statusBar", "statusText", "info", `🩺 المرحلة ${stepNum}/${totalStages}: المراجعة المزدوجة والتدقيق اللغوي...`);
         const curEng = document.getElementById("primaryEngineSelect").value;
         const curMod = document.getElementById("primaryModelSelect").value;
-        draft = cleanAiMetaText(await callModel(curEng, curMod, buildProofreaderPrompt(raw, draft, "news"), "primary"));
+        draft = postPolishNewsOutput(cleanAiMetaText(await callModel(curEng, curMod, buildProofreaderPrompt(raw, draft, "news"), "primary")));
+        document.getElementById("editedNewsOutput").value = draft;
+        runQualityRadar();
+      }
+
+      if (thirdStageOn) {
+        stepNum++;
+        setStatus("statusBar", "statusText", "info", `🛡️ المرحلة ${stepNum}/${totalStages} (الطبقة الثالثة): مطابقة النمط المستلهم والتعديلات السابقة وفحص المصطلحات والممنوعات...`);
+        const preCleaned = postPolishNewsOutput(draft);
+        const curEng3 = document.getElementById("primaryEngineSelect").value;
+        const curMod3 = document.getElementById("primaryModelSelect").value;
+        draft = postPolishNewsOutput(cleanAiMetaText(await callModel(curEng3, curMod3, buildThirdLayerNewsPrompt(raw, preCleaned), "primary")));
         document.getElementById("editedNewsOutput").value = draft;
       }
+
+      document.getElementById("editedNewsOutput").value = postPolishNewsOutput(document.getElementById("editedNewsOutput").value);
       autoFixArabicErrors("editedNewsOutput", true);
       state.lastAiNewsDraft = document.getElementById("editedNewsOutput").value;
-      setStatus("statusBar", "statusText", "ok", "✅ تم التحرير والتدقيق وفق السياسة التحريرية بنجاح!");
+      setStatus(
+        "statusBar",
+        "statusText",
+        "ok",
+        thirdStageOn
+          ? "✅ اكتمل التحرير والمراجعة عبر الطبقات الثلاث (الصياغة + التدقيق + مطابقة النمط والمصطلحات والممنوعات)!"
+          : "✅ تم التحرير والتدقيق وفق السياسة التحريرية بنجاح!"
+      );
     }
   } catch (err) {
     setStatus("statusBar", "statusText", "err", `⚠️ ${err.message}`);
   } finally {
     btn.disabled = false;
+  }
+}
+
+async function runThirdLayerOnly() {
+  const outEl = document.getElementById("editedNewsOutput");
+  const draft = (outEl?.value || "").trim();
+  if (!draft) {
+    showToast("⚠️ لا يوجد خبر محرر لتشغيل الطبقة الثالثة عليه!");
+    return;
+  }
+  const raw = (document.getElementById("rawNewsInput")?.value || "").trim() || draft;
+  const btn = document.getElementById("runThirdLayerOnlyBtn");
+  const curEng = document.getElementById("primaryEngineSelect").value;
+  const curMod = document.getElementById("primaryModelSelect").value;
+
+  if (btn) btn.disabled = true;
+  try {
+    setStatus("statusBar", "statusText", "info", "🛡️ الطبقة الثالثة: جاري مطابقة النمط المستلهم والتعديلات وفحص المصطلحات والممنوعات وإصلاحها...");
+    const preCleaned = postPolishNewsOutput(draft);
+    const refined = postPolishNewsOutput(cleanAiMetaText(await callModel(curEng, curMod, buildThirdLayerNewsPrompt(raw, preCleaned), "primary")));
+    outEl.value = refined;
+    autoFixArabicErrors("editedNewsOutput", true);
+    state.lastAiNewsDraft = outEl.value;
+    runQualityRadar();
+    setStatus("statusBar", "statusText", "ok", "✅ اكتملت مطابقة النمط المستلهم والتعديلات وإصلاح المصطلحات والممنوعات!");
+  } catch (err) {
+    setStatus("statusBar", "statusText", "err", `⚠️ ${err.message}`);
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -1484,15 +1783,21 @@ function scanPolicyViolations(text) {
     }
   });
 
-  // 3. Forbidden Compound Directions (شمال شرق / جنوب غرب...)
+  // 3. Forbidden Compound Directions (شمال شرق / جنوب غرب...) + general directional details if editor rule active
   const compDirs = ["شمال شرق", "شمال غرب", "جنوب شرق", "جنوب غرب", "شمالي شرق", "شمالي غرب", "جنوبي شرق", "جنوبي غرب"];
   compDirs.forEach(d => {
     if (text.includes(d)) issues.push({ type: "err", msg: `اتجاه جغرافي مركب ممنوع: «${d}»` });
   });
+  if (state.newsRules.some(r => r.active && /تفاصيل الاتجاهات/.test(r.text || ""))) {
+    const extraDirs = text.match(/(^|[\s،])(شمال|جنوب|شرق|غرب|شمالي|جنوبي|شرقي|غربي)\s+(بلدة|قرية|مدينة|مخيم|حي|منطقة)/g);
+    if (extraDirs) {
+      issues.push({ type: "warn", msg: `اتجاه جغرافي زائد (${extraDirs[0].trim()}) — اكتفِ باسم المنطقة فقط` });
+    }
+  }
 
   // 4. Palestinian context check: forbid "مواطن / مواطنين", enforce "استشهاد" instead of "مقتل", & Gaza/WestBank force naming
-  const isPal = /(غزة|الضفة|القدس|فلسطين|جنين|نابلس|طولكرم|الخليل|رام الله|رفح|خان يونس|جباليا|النصيرات)/.test(text);
-  if (isPal && /(^|\s)(مواطن|مواطنان|مواطنين|مواطنون|المواطنين)(?=[\s،.:؛]|$)/.test(text)) {
+  const isPal = /(غزة|الضفة|القدس|فلسطين|جنين|نابلس|طولكرم|الخليل|رام الله|قلقيلية|بيت لحم|رفح|خان يونس|جباليا|النصيرات|دير البلح|الشجاعية)/.test(text);
+  if (isPal && /(^|[\s،.:؛«"(])(ال)?مواطن(ين|ون|ان|ة|ات|اً|ًا)?(?=[\s،.:؛»")!]|$)/.test(text)) {
     issues.push({ type: "err", msg: `في الأخبار الفلسطينية نكتب «فلسطيني/فلسطينيين» وليس «مواطن»!` });
   }
   if (isPal && /(^|\s)(مقتل|قُتل|قتلوا|قتلى)(?=[\s،.:؛]|$)/.test(text)) {
@@ -2425,14 +2730,14 @@ function setupPwaFeatures() {
   // Purge any old v1-v4 PWA caches automatically so updates apply immediately!
   if ("caches" in window) {
     caches.keys().then(keys => {
-      keys.filter(k => k !== "mihbarah-pwa-v29").forEach(k => caches.delete(k));
+      keys.filter(k => k !== "mihbarah-pwa-v30").forEach(k => caches.delete(k));
     }).catch(() => {});
   }
 
   // 1. Register Service Worker
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js?v=29").then(reg => {
+      navigator.serviceWorker.register("sw.js?v=30").then(reg => {
         reg.update().catch(() => {});
       }).catch(() => {});
     });
