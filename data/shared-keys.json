@@ -5,12 +5,12 @@
   "github": "v1:743f0e7128d8e2f8d547025756b8a5ccde5831117ac0e08193633d2f76db94f99fe60230627993b6",
   "modelPrefs": {
     "primaryEngine": "groq",
-    "primaryModel": "openai/gpt-oss-120b",
+    "primaryModel": "qwen/qwen3.8-27b",
     "secondaryEngine": "instant_free",
     "secondaryModel": "gpt-oss-120b",
     "tickerEngine": "groq",
     "tickerModel": "openai/gpt-oss-120b",
-    "updatedAt": 1793466016393
+    "updatedAt": 1793466076861
   },
-  "updatedAt": "2026-10-31T17:00:18.396Z"
+  "updatedAt": "2026-10-31T17:01:18.861Z"
 }
