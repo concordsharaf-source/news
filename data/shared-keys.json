@@ -4,13 +4,13 @@
   "gemini": "v1:0c401c7c7b9ca2f7e6013540649999dee83b22604988febded604d4549bba3f8dcd74731777db5a7f5c0250a1052afe4e4cf551079",
   "github": "v1:743f0e7128d8e2f8d547025756b8a5ccde5831117ac0e08193633d2f76db94f99fe60230627993b6",
   "modelPrefs": {
-    "primaryEngine": "groq",
-    "primaryModel": "ovh-meta-llama-3.3-70b",
+    "primaryEngine": "instant_free",
+    "primaryModel": "qwen-397b",
     "secondaryEngine": "instant_free",
     "secondaryModel": "gpt-oss-120b",
     "tickerEngine": "groq",
     "tickerModel": "openai/gpt-oss-120b",
-    "updatedAt": 1793524021556
+    "updatedAt": 1793524567802
   },
-  "updatedAt": "2026-11-01T09:07:03.557Z"
+  "updatedAt": "2026-11-01T09:16:09.803Z"
 }
