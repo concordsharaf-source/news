@@ -8,9 +8,9 @@
     "primaryModel": "qwen-397b",
     "secondaryEngine": "instant_free",
     "secondaryModel": "gpt-oss-120b",
-    "tickerEngine": "groq",
-    "tickerModel": "openai/gpt-oss-120b",
-    "updatedAt": 1793526399631
+    "tickerEngine": "instant_free",
+    "tickerModel": "qwen-397b",
+    "updatedAt": 1793528246419
   },
-  "updatedAt": "2026-11-01T09:46:41.983Z"
+  "updatedAt": "2026-11-01T10:17:28.983Z"
 }
