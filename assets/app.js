@@ -1208,12 +1208,38 @@ function setupNewsCopyLockGuards() {
       }
     }
   }, true);
+
+  const rawBox = document.getElementById("rawNewsInput");
+  if (rawBox) {
+    rawBox.addEventListener("beforeinput", (e) => {
+      if (e.inputType === "insertLineBreak" && (Date.now() - lastRawShiftEnterTs) > 250) {
+        e.preventDefault();
+        if (!state.newsReviewInProgress && !document.getElementById("runAiBtn")?.disabled) {
+          runEditorialWorkflow();
+        }
+      }
+    });
+  }
+}
+
+let lastRawShiftEnterTs = 0;
+function handleRawNewsKeydown(e) {
+  if (e.key === "Enter" && e.shiftKey) {
+    lastRawShiftEnterTs = Date.now();
+    return;
+  }
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+    e.preventDefault();
+    if (state.newsReviewInProgress || document.getElementById("runAiBtn")?.disabled) return;
+    runEditorialWorkflow();
+  }
 }
 
 // =========================================================================
 // Workflows
 // =========================================================================
 async function runEditorialWorkflow() {
+  if (state.newsReviewInProgress) return;
   const raw = document.getElementById("rawNewsInput").value.trim();
   if (!raw) { showToast("⚠️ الصق الخبر الخام أولاً"); return; }
 
@@ -2116,6 +2142,7 @@ function fixSingleArabicSegment(seg, isTicker = false) {
   });
 
   txt = txt.replace(/https?:\/\/\S+|www\.\S+|t\.me\/\S+/gi, "");
+  txt = txt.replace(/قوات\s+الصهيوني(?=\s|[،.؛:!؟]|$)/g, "قوات العدو الصهيوني");
   txt = txt.replace(/(^|[\s«"(])دهم(?=[\s،.:؛»")!]|$)/gm, "$1مداهمة");
 
   const bareVerbs = [
@@ -2853,14 +2880,14 @@ function setupPwaFeatures() {
   // Purge any old v1-v4 PWA caches automatically so updates apply immediately!
   if ("caches" in window) {
     caches.keys().then(keys => {
-      keys.filter(k => k !== "mihbarah-pwa-v32").forEach(k => caches.delete(k));
+      keys.filter(k => k !== "mihbarah-pwa-v33").forEach(k => caches.delete(k));
     }).catch(() => {});
   }
 
   // 1. Register Service Worker
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js?v=32").then(reg => {
+      navigator.serviceWorker.register("sw.js?v=33").then(reg => {
         reg.update().catch(() => {});
       }).catch(() => {});
     });

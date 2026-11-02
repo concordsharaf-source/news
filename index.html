@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="assets/style.css?v=32" />
+  <link rel="stylesheet" href="assets/style.css?v=33" />
 </head>
 <body class="app-locked">
   <!-- Full-Screen Password & 15-Min Idle Auto-Lock Gate -->
@@ -93,7 +93,7 @@
               </div>
             </div>
 
-            <textarea id="rawNewsInput" rows="8" placeholder="الصق الخبر الخام هنا... سيتم تطبيق القالب المعتمد (المنطقة + كبشن 10 كلمات + المقدمة + lvo + وأفادت مصادر + وأضافت المصادر + الخاتمة) وتحويل الأرقام للحروف وضبط المصطلحات تلقائياً!" oninput="updateRawStats(); runQualityRadar();"></textarea>
+            <textarea id="rawNewsInput" rows="8" enterkeyhint="send" placeholder="الصق الخبر الخام هنا واضغط Enter للتحرير فوراً... (أو Shift+Enter لسطر جديد)" onkeydown="handleRawNewsKeydown(event)" oninput="updateRawStats(); runQualityRadar();"></textarea>
 
             <div style="margin-top:8px;">
               <button class="btn btn-primary" id="runAiBtn" style="width:100%; font-size:0.98rem; padding:11px 16px;" onclick="runEditorialWorkflow()">
@@ -579,6 +579,6 @@
   </div>
 
   <div id="toast" class="toast"></div>
-  <script src="assets/app.js?v=32"></script>
+  <script src="assets/app.js?v=33"></script>
 </body>
 </html>
