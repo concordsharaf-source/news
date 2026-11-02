@@ -274,3 +274,29 @@ body.app-locked .lock-overlay {
 .lock-shake {
   animation: lockShakeAnim 0.35s ease;
 }
+
+/* Lock Selection & Copying of News Output Until All Review Stages Complete */
+.review-locked-field {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  pointer-events: none !important;
+  opacity: 0.68;
+  cursor: not-allowed !important;
+}
+.review-lock-banner {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 11px;
+  margin-bottom: 8px;
+  border-radius: 9px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  border: 1px solid var(--warn);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+.review-lock-banner.show {
+  display: flex;
+}

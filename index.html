@@ -12,7 +12,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="assets/style.css?v=31" />
+  <link rel="stylesheet" href="assets/style.css?v=32" />
 </head>
 <body class="app-locked">
   <!-- Full-Screen Password & 15-Min Idle Auto-Lock Gate -->
@@ -162,25 +162,28 @@
             <div class="card-header">
               <h2 class="card-title">📰 الخبر المحرر والمدقق النهائي</h2>
               <div style="display:flex; gap:5px; flex-wrap:wrap;">
-                <button class="btn btn-primary btn-sm" onclick="copyOutput('editedNewsOutput')">📋 نسخ للنشر</button>
+                <button class="btn btn-primary btn-sm" id="copyNewsTopBtn" onclick="copyOutput('editedNewsOutput')">📋 نسخ للنشر</button>
               </div>
             </div>
 
             <div id="statusBar" class="status-bar"><span id="statusText"></span></div>
+            <div id="newsReviewLockBanner" class="review-lock-banner">
+              🔒 التحديد والنسخ مغلق مؤقتاً حتى انتهاء جميع مراحل المراجعة والتدقيق...
+            </div>
 
             <div id="compareContainer" style="display:none; margin-bottom:12px;">
               <div class="compare-grid">
                 <div class="compare-col">
                   <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
                     <strong id="compTitleA" style="font-size:0.82rem;">النموذج أ</strong>
-                    <button class="btn btn-primary btn-sm" onclick="adoptComparison('A')">اعتماد ⬇️</button>
+                    <button class="btn btn-primary btn-sm" id="adoptCompABtn" onclick="adoptComparison('A')">اعتماد ⬇️</button>
                   </div>
                   <textarea id="compOutputA" rows="7"></textarea>
                 </div>
                 <div class="compare-col">
                   <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
                     <strong id="compTitleB" style="font-size:0.82rem;">النموذج ب</strong>
-                    <button class="btn btn-primary btn-sm" onclick="adoptComparison('B')">اعتماد ⬇️</button>
+                    <button class="btn btn-primary btn-sm" id="adoptCompBBtn" onclick="adoptComparison('B')">اعتماد ⬇️</button>
                   </div>
                   <textarea id="compOutputB" rows="7"></textarea>
                 </div>
@@ -192,10 +195,10 @@
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-top:9px;">
               <span id="editedStats" class="muted-note">0 كلمة | 0 حرف</span>
               <div style="display:flex; gap:6px; flex-wrap:wrap;">
-                <button class="btn btn-primary btn-sm" onclick="copyOutput('editedNewsOutput')">📋 نسخ الخبر</button>
-                <button class="btn btn-ok btn-sm" onclick="saveManualEditsForLearning('news')" title="يقارن نص النموذج بتعديلاتك اليدوية ويعرض الفروق ويحفظها ليستفيد منها النموذج لاحقاً">🔍 مقارنة التعديلات والاستفادة منها لاحقاً</button>
-                <button class="btn btn-outline btn-sm" onclick="sendEditedNewsToTicker()">📺 أرسل للشريط الإخباري</button>
-                <button class="btn btn-warn btn-sm" onclick="saveCurrentNewsAsExample()" title="يستلهم النمط والأسلوب التحريري فقط من هذا الخبر دون حفظه حرفياً">🧠 استلهام النمط</button>
+                <button class="btn btn-primary btn-sm" id="copyNewsBottomBtn" onclick="copyOutput('editedNewsOutput')">📋 نسخ الخبر</button>
+                <button class="btn btn-ok btn-sm" id="compareNewsEditsBtn" onclick="saveManualEditsForLearning('news')" title="يقارن نص النموذج بتعديلاتك اليدوية ويعرض الفروق ويحفظها ليستفيد منها النموذج لاحقاً">🔍 مقارنة التعديلات والاستفادة منها لاحقاً</button>
+                <button class="btn btn-outline btn-sm" id="sendNewsToTickerBtn" onclick="sendEditedNewsToTicker()">📺 أرسل للشريط الإخباري</button>
+                <button class="btn btn-warn btn-sm" id="distillCurrentNewsBtn" onclick="saveCurrentNewsAsExample()" title="يستلهم النمط والأسلوب التحريري فقط من هذا الخبر دون حفظه حرفياً">🧠 استلهام النمط</button>
               </div>
             </div>
 
@@ -576,6 +579,6 @@
   </div>
 
   <div id="toast" class="toast"></div>
-  <script src="assets/app.js?v=31"></script>
+  <script src="assets/app.js?v=32"></script>
 </body>
 </html>

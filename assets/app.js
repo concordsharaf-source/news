@@ -97,6 +97,7 @@ let state = {
   localTickerExamples: SafeStorage.get("nr_local_ticker_ex", []),
   learnedEdits: SafeStorage.get("nr_learned_edits_v2", { news: [], ticker: [] }),
   deletedRuleIds: SafeStorage.get("nr_deleted_rule_ids_v1", []),
+  newsReviewInProgress: false,
   lastAiNewsDraft: "",
   lastAiTickerDraft: "",
   keys: SafeStorage.get("nr_keys_v1", { groq: "", openrouter: "", gemini: "", github: "" }),
@@ -656,6 +657,20 @@ function collectDeepNewsViolations(draftText, rawText = "") {
     findings.push(`كُتبت المائة بدون ألف (${badMia.map(s => s.trim()).join("، ")}) — اكتبها بالألف دائماً: مائة، مائتان، ثلاثمائة... تسعمائة.`);
   }
 
+  // 2b. Arabic Number-Gender Agreement & Repeated "وأفادت" checks
+  const mascNumWithFemNoun = draftText.match(/(^|[\s،(«])(ثلاثة|أربعة|خمسة|ستة|سبعة|ثمانية|تسعة|عشرة)\s+(آليات|عائلات|أسر|نساء|فتيات|سيدات|طائرات|مقاتلات|غارات|مسيرات|طائرات مسيرة|قذائف|مركبات|سيارات|خيام|شقق|مدارس|مستشفيات|إصابات|حالات|ساعات|مرات|سنوات|قرى|بلدات|مدن|دول)(?=[\s،.:؛»)]|$)/g);
+  if (mascNumWithFemNoun) {
+    findings.push(`خطأ نحوي في تذكير وتأنيث العدد مع المعدود المؤنث (${mascNumWithFemNoun.map(s => s.trim()).join("، ")}) — الأعداد (3–10) تخالف المعدود في التذكير والتأنيث باعتبار المفرد (مثال: سبع آليات وليس سبعة آليات، سبع وعشرون عائلة وليس سبعة وعشرون عائلة).`);
+  }
+  const femNumWithMascNoun = draftText.match(/(^|[\s،(«])(ثلاث|أربع|خمس|ست|سبع|ثماني|تسع)\s+(شهداء|جرحى|مصابين|أطفال|رجال|شبان|فلسطينيين|معتقلين|أسرى|منازل|بيوت|مبانٍ|مباني|صواريخ|جنود|ضباط|أيام|أشهر|أعوام)(?=[\s،.:؛»)]|$)/g);
+  if (femNumWithMascNoun) {
+    findings.push(`خطأ نحوي في تذكير وتأنيث العدد مع المعدود المذكر (${femNumWithMascNoun.map(s => s.trim()).join("، ")}) — الأعداد (3–9) تؤنث مع المعدود المذكر (مثال: سبعة شهداء، خمسة منازل، ثلاثة أيام).`);
+  }
+  const afadatMatches = draftText.match(/(^|[\s\n])و?أفادت\s/g);
+  if (afadatMatches && afadatMatches.length >= 2) {
+    findings.push(`تكرر الفعل «أفادت / وأفادت» (${afadatMatches.length} مرات) في الخبر — لا تكرر «وأفادت» أكثر من مرة واحدة فقط (تُستخدم مرة واحدة بعد فاصل lvo، وتُستخدم بعدها: وأضافت المصادر / وأوضحت / وأكدت).`);
+  }
+
   // 3. Complete Dictionary scan
   state.dictionary.forEach(({ bad, good }) => {
     if (bad && draftText.includes(bad)) {
@@ -1117,6 +1132,85 @@ function cleanAiMetaText(txt) {
 }
 
 // =========================================================================
+// Lock Selection & Copy of News Output Until All Review Stages Complete
+// =========================================================================
+function setNewsReviewLock(locked) {
+  state.newsReviewInProgress = !!locked;
+
+  const banner = document.getElementById("newsReviewLockBanner");
+  if (banner) banner.classList.toggle("show", !!locked);
+
+  ["editedNewsOutput", "compOutputA", "compOutputB"].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.toggle("review-locked-field", !!locked);
+    el.readOnly = !!locked;
+    if (locked) {
+      try { el.setSelectionRange(0, 0); } catch (e) {}
+      if (document.activeElement === el) el.blur();
+    }
+  });
+
+  if (locked) {
+    try { window.getSelection()?.removeAllRanges(); } catch (e) {}
+  }
+
+  const topCopy = document.getElementById("copyNewsTopBtn");
+  const botCopy = document.getElementById("copyNewsBottomBtn");
+  if (topCopy) {
+    topCopy.disabled = !!locked;
+    topCopy.textContent = locked ? "⏳ بانتظار انتهاء المراجعة..." : "📋 نسخ للنشر";
+  }
+  if (botCopy) {
+    botCopy.disabled = !!locked;
+    botCopy.textContent = locked ? "⏳ بانتظار انتهاء المراجعة..." : "📋 نسخ الخبر";
+  }
+
+  ["compareNewsEditsBtn", "sendNewsToTickerBtn", "distillCurrentNewsBtn", "adoptCompABtn", "adoptCompBBtn", "runThirdLayerOnlyBtn"].forEach(btnId => {
+    const b = document.getElementById(btnId);
+    if (b) b.disabled = !!locked;
+  });
+}
+
+function setupNewsCopyLockGuards() {
+  const blockIfReviewBusy = (e) => {
+    if (!state.newsReviewInProgress) return;
+    e.preventDefault();
+    e.stopPropagation();
+    try { window.getSelection()?.removeAllRanges(); } catch (err) {}
+    if (e.type === "copy" || e.type === "cut" || e.type === "contextmenu" || e.type === "keydown") {
+      showToast("⏳ لا يمكن تحديد أو نسخ الخبر إلا بعد انتهاء جميع مراحل المراجعة!");
+    }
+  };
+
+  ["editedNewsOutput", "compOutputA", "compOutputB"].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    ["copy", "cut", "selectstart", "dragstart", "contextmenu", "mousedown", "touchstart"].forEach(evt => {
+      el.addEventListener(evt, blockIfReviewBusy);
+    });
+    el.addEventListener("keydown", (e) => {
+      if (!state.newsReviewInProgress) return;
+      if ((e.ctrlKey || e.metaKey) && ["c", "x", "a", "C", "X", "A"].includes(e.key)) {
+        blockIfReviewBusy(e);
+      }
+    });
+  });
+
+  document.addEventListener("copy", (e) => {
+    if (!state.newsReviewInProgress) return;
+    const editorTab = document.getElementById("tab-editor");
+    if (editorTab && editorTab.classList.contains("active")) {
+      const activeId = document.activeElement?.id || "";
+      // Allow copying from rawNewsInput only; block copying any news output while reviewing
+      if (activeId !== "rawNewsInput" && activeId !== "extraNote" && activeId !== "newsRevisionNote") {
+        blockIfReviewBusy(e);
+      }
+    }
+  }, true);
+}
+
+// =========================================================================
 // Workflows
 // =========================================================================
 async function runEditorialWorkflow() {
@@ -1133,6 +1227,7 @@ async function runEditorialWorkflow() {
   const sMod = document.getElementById("secondaryModelSelect").value;
 
   btn.disabled = true;
+  setNewsReviewLock(true);
   document.getElementById("editedNewsOutput").value = "";
   state.lastAiNewsDraft = "";
   hideDiffBox("news");
@@ -1153,13 +1248,13 @@ async function runEditorialWorkflow() {
         setStatus("statusBar", "statusText", "info", "🛡️ الطبقة الثالثة: مطابقة النمط المستلهم والتعديلات وفحص المصطلحات والممنوعات...");
         const curEng = document.getElementById("primaryEngineSelect").value;
         const curMod = document.getElementById("primaryModelSelect").value;
-        chosen = postPolishNewsOutput(cleanAiMetaText(await callModel(curEng, curMod, buildThirdLayerNewsPrompt(raw, chosen), "primary")));
+        chosen = postPolishNewsOutput(cleanAiMetaText(await callModel(curEng, curMod, buildThirdLayerNewsPrompt(raw, chosen), "")));
       }
       document.getElementById("editedNewsOutput").value = chosen;
       autoFixArabicErrors("editedNewsOutput", true);
       state.lastAiNewsDraft = document.getElementById("editedNewsOutput").value;
       runQualityRadar();
-      setStatus("statusBar", "statusText", "ok", "✅ اكتملت المقارنة والضبط النهائي!");
+      setStatus("statusBar", "statusText", "ok", "✅ اكتملت المقارنة والضبط النهائي — يمكنك الآن التحديد والنسخ!");
     } else {
       const totalStages = 1 + (twoStageOn && state.selectedFormat !== "proofread" ? 1 : 0) + (thirdStageOn ? 1 : 0);
       let stepNum = 1;
@@ -1174,7 +1269,7 @@ async function runEditorialWorkflow() {
         setStatus("statusBar", "statusText", "info", `🩺 المرحلة ${stepNum}/${totalStages}: المراجعة المزدوجة والتدقيق اللغوي...`);
         const curEng = document.getElementById("primaryEngineSelect").value;
         const curMod = document.getElementById("primaryModelSelect").value;
-        draft = postPolishNewsOutput(cleanAiMetaText(await callModel(curEng, curMod, buildProofreaderPrompt(raw, draft, "news"), "primary")));
+        draft = postPolishNewsOutput(cleanAiMetaText(await callModel(curEng, curMod, buildProofreaderPrompt(raw, draft, "news"), "")));
         document.getElementById("editedNewsOutput").value = draft;
         runQualityRadar();
       }
@@ -1185,7 +1280,7 @@ async function runEditorialWorkflow() {
         const preCleaned = postPolishNewsOutput(draft);
         const curEng3 = document.getElementById("primaryEngineSelect").value;
         const curMod3 = document.getElementById("primaryModelSelect").value;
-        draft = postPolishNewsOutput(cleanAiMetaText(await callModel(curEng3, curMod3, buildThirdLayerNewsPrompt(raw, preCleaned), "primary")));
+        draft = postPolishNewsOutput(cleanAiMetaText(await callModel(curEng3, curMod3, buildThirdLayerNewsPrompt(raw, preCleaned), "")));
         document.getElementById("editedNewsOutput").value = draft;
       }
 
@@ -1197,18 +1292,20 @@ async function runEditorialWorkflow() {
         "statusText",
         "ok",
         thirdStageOn
-          ? "✅ اكتمل التحرير والمراجعة عبر الطبقات الثلاث (الصياغة + التدقيق + مطابقة النمط والمصطلحات والممنوعات)!"
-          : "✅ تم التحرير والتدقيق وفق السياسة التحريرية بنجاح!"
+          ? "✅ اكتملت جميع مراحل المراجعة الثلاث بنجاح — يمكنك الآن تحديد ونسخ الخبر!"
+          : "✅ تم التحرير والتدقيق وفق السياسة التحريرية بنجاح — يمكنك الآن نسخ الخبر!"
       );
     }
   } catch (err) {
     setStatus("statusBar", "statusText", "err", `⚠️ ${err.message}`);
   } finally {
+    setNewsReviewLock(false);
     btn.disabled = false;
   }
 }
 
 async function runThirdLayerOnly() {
+  if (state.newsReviewInProgress) return;
   const outEl = document.getElementById("editedNewsOutput");
   const draft = (outEl?.value || "").trim();
   if (!draft) {
@@ -1220,7 +1317,7 @@ async function runThirdLayerOnly() {
   const curEng = document.getElementById("primaryEngineSelect").value;
   const curMod = document.getElementById("primaryModelSelect").value;
 
-  if (btn) btn.disabled = true;
+  setNewsReviewLock(true);
   try {
     setStatus("statusBar", "statusText", "info", "🛡️ الطبقة الثالثة: جاري مطابقة النمط المستلهم والتعديلات وفحص المصطلحات والممنوعات وإصلاحها...");
     const preCleaned = postPolishNewsOutput(draft);
@@ -1229,10 +1326,11 @@ async function runThirdLayerOnly() {
     autoFixArabicErrors("editedNewsOutput", true);
     state.lastAiNewsDraft = outEl.value;
     runQualityRadar();
-    setStatus("statusBar", "statusText", "ok", "✅ اكتملت مطابقة النمط المستلهم والتعديلات وإصلاح المصطلحات والممنوعات!");
+    setStatus("statusBar", "statusText", "ok", "✅ اكتملت مطابقة النمط المستلهم والتعديلات وإصلاح المصطلحات والممنوعات — جاهز للنسخ!");
   } catch (err) {
     setStatus("statusBar", "statusText", "err", `⚠️ ${err.message}`);
   } finally {
+    setNewsReviewLock(false);
     if (btn) btn.disabled = false;
   }
 }
@@ -1367,15 +1465,19 @@ async function runSecondPassProofreadOnly(mode) {
   const barId = isTicker ? "tickerStatusBar" : "statusBar";
   const txtId = isTicker ? "tickerStatusText" : "statusText";
 
+  if (!isTicker) setNewsReviewLock(true);
   try {
     setStatus(barId, txtId, "info", "🩺 جاري التدقيق اللغوي والمصطلحي الصارم...");
     let fixed = cleanAiMetaText(await callModel(pEng, pMod, buildProofreaderPrompt(raw || draft, draft, mode)));
     if (isTicker) fixed = normalizeTickerLines(fixed);
+    else fixed = postPolishNewsOutput(fixed);
     document.getElementById(outId).value = fixed;
     isTicker ? runTickerRadar() : runQualityRadar();
     setStatus(barId, txtId, "ok", "✅ تمت المراجعة اللغوية والمصطلحية!");
   } catch (err) {
     setStatus(barId, txtId, "err", `⚠️ ${err.message}`);
+  } finally {
+    if (!isTicker) setNewsReviewLock(false);
   }
 }
 
@@ -1501,6 +1603,7 @@ async function applyRevisionNote(mode, saveAsRule) {
 
   if (btnA) btnA.disabled = true;
   if (btnB) btnB.disabled = true;
+  if (!isTicker) setNewsReviewLock(true);
 
   try {
     let ruleStatus = null;
@@ -1510,8 +1613,9 @@ async function applyRevisionNote(mode, saveAsRule) {
 
     setStatus(barId, txtId, "info", "✏️ جاري تعديل النص وفق ملاحظتك بدقة مع الحفاظ على القالب والمصطلحات...");
     const prompt = buildRevisionPrompt(rawText, currentDraft, note, mode);
-    let updated = cleanAiMetaText(await callModel(pEng, pMod, prompt));
+    let updated = cleanAiMetaText(await callModel(pEng, pMod, prompt, isTicker ? "ticker" : "primary"));
     if (isTicker) updated = normalizeTickerLines(updated);
+    else updated = postPolishNewsOutput(updated);
 
     document.getElementById(outId).value = updated;
     autoFixArabicErrors(outId, true);
@@ -1530,6 +1634,7 @@ async function applyRevisionNote(mode, saveAsRule) {
   } catch (err) {
     setStatus(barId, txtId, "err", `⚠️ ${err.message}`);
   } finally {
+    if (!isTicker) setNewsReviewLock(false);
     if (btnA) btnA.disabled = false;
     if (btnB) btnB.disabled = false;
   }
@@ -2549,6 +2654,10 @@ function downloadTickerTxt() {
   a.download = `ticker-${new Date().toISOString().slice(0,10)}.txt`; a.click();
 }
 function sendEditedNewsToTicker() {
+  if (state.newsReviewInProgress) {
+    showToast("⏳ لا يمكن إرسال أو نسخ الخبر إلا بعد انتهاء جميع مراحل المراجعة!");
+    return;
+  }
   const source = document.getElementById("editedNewsOutput").value.trim() || document.getElementById("rawNewsInput").value.trim();
   if (!source) return;
   // Replace previous bulletin & clear previous ticker output cleanly!
@@ -2613,11 +2722,19 @@ function clearTickerDesk() {
   document.getElementById("tickerStatusBar").className = "status-bar"; updateBulletinStats(); runTickerRadar();
 }
 async function copyOutput(id) {
+  if ((id === "editedNewsOutput" || id === "compOutputA" || id === "compOutputB") && state.newsReviewInProgress) {
+    showToast("⏳ لا يمكن تحديد أو نسخ الخبر إلا بعد انتهاء جميع مراحل المراجعة!");
+    return;
+  }
   const t = document.getElementById(id).value.trim();
   if (!t) { showToast("⚠️ الخانة فارغة"); return; }
   await copyTextSafe(t); showToast("✅ تم نسخ الخبر المحرر!");
 }
 function adoptComparison(which) {
+  if (state.newsReviewInProgress) {
+    showToast("⏳ انتظر انتهاء مراحل المراجعة أولاً!");
+    return;
+  }
   document.getElementById("editedNewsOutput").value = document.getElementById("compOutput" + which).value;
   state.lastAiNewsDraft = document.getElementById("editedNewsOutput").value;
   hideDiffBox("news");
@@ -2736,14 +2853,14 @@ function setupPwaFeatures() {
   // Purge any old v1-v4 PWA caches automatically so updates apply immediately!
   if ("caches" in window) {
     caches.keys().then(keys => {
-      keys.filter(k => k !== "mihbarah-pwa-v31").forEach(k => caches.delete(k));
+      keys.filter(k => k !== "mihbarah-pwa-v32").forEach(k => caches.delete(k));
     }).catch(() => {});
   }
 
   // 1. Register Service Worker
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js?v=31").then(reg => {
+      navigator.serviceWorker.register("sw.js?v=32").then(reg => {
         reg.update().catch(() => {});
       }).catch(() => {});
     });
@@ -3038,4 +3155,5 @@ function setupLockGuard() {
 }
 
 setupPwaFeatures();
+setupNewsCopyLockGuards();
 setupLockGuard();
